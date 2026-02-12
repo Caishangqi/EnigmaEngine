@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BuildTool</RootNamespace>
+    <AssemblyName>BuildTool</AssemblyName>
+    <Configurations>Debug;Release;Development</Configurations>
+    <Configuration Condition=" '$(Configuration)' == '' ">Development</Configuration>
+  </PropertyGroup>
+
+  <!-- Development configuration: optimized build (matches UE's UnrealBuildTool pattern) -->
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Development|AnyCPU' ">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <!-- Exclude test data files from compilation (they are parsed as text, not compiled) -->
+  <ItemGroup>
+    <Compile Remove="Tests\**\*.Target.cs" />
+    <Compile Remove="Tests\**\*.Build.cs" />
+    <None Include="Tests\**\*.Target.cs" CopyToOutputDirectory="Never" />
+    <None Include="Tests\**\*.Build.cs" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+</Project>

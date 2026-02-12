@@ -1,0 +1,23 @@
+{
+    "FileVersion": 1,
+    "Version": 2,
+    "VersionName": "1.0.0",
+    "FriendlyName": "Inventory System",
+    "Description": "Plugin providing inventory management modules",
+    "Category": "Gameplay",
+    "CreatedBy": "EnigmaEngine",
+    "CanContainContent": false,
+    "Modules": [
+        {
+            "Name": "InventoryCore",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        },
+        {
+            "Name": "InventoryUI",
+            "Type": "Runtime",
+            "LoadingPhase": "PostEngineInit"
+        }
+    ],
+    "Plugins": []
+}

@@ -1,0 +1,52 @@
+# ModuleInterface test: verifies IModuleInterface, IMPLEMENT_MODULE, IMPLEMENT_GAME_MODULE
+# Uses self-registering linked list pattern (mirrors Unreal Engine)
+cmake_minimum_required(VERSION 3.28)
+project(ModuleInterfaceTest LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(MSVC)
+    add_compile_options(/std:c++latest)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-std=c++2c)
+endif()
+
+# All binaries go to the same directory so the runner can find the DLLs
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Bin)
+
+# Engine Core public headers
+set(CORE_PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/Runtime/Core/Public")
+set(CORE_PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/Runtime/Core/Private")
+
+# -- Core (SHARED) -- contains FModuleInitializerEntry implementation
+add_library(Core SHARED
+    "${CORE_PRIVATE}/Modules/ModuleInitializerEntry.cpp"
+    "${CORE_PRIVATE}/Logging/LogSystem.cpp"
+    "${CORE_PRIVATE}/Misc/AssertionMacros.cpp"
+)
+target_include_directories(Core PUBLIC "${CORE_PUBLIC}")
+target_compile_definitions(Core PRIVATE CORE_EXPORTS)
+
+# -- TestModule (SHARED, uses IMPLEMENT_MODULE) --
+add_library(TestModule SHARED
+    Source/TestModule/Private/TestModule.cpp
+)
+target_include_directories(TestModule PRIVATE "${CORE_PUBLIC}")
+target_link_libraries(TestModule PRIVATE Core)
+
+# -- TestGameModule (SHARED, uses IMPLEMENT_GAME_MODULE) --
+add_library(TestGameModule SHARED
+    Source/TestGameModule/Private/TestGameModule.cpp
+)
+target_include_directories(TestGameModule PRIVATE "${CORE_PUBLIC}")
+target_link_libraries(TestGameModule PRIVATE Core)
+
+# -- TestRunner (executable, loads DLLs and uses FindModule) --
+add_executable(TestRunner
+    Source/TestRunner/Private/Main.cpp
+)
+target_include_directories(TestRunner PRIVATE "${CORE_PUBLIC}")
+target_link_libraries(TestRunner PRIVATE Core)

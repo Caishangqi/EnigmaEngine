@@ -1,0 +1,33 @@
+{
+    "FileVersion": 1,
+    "Version": 3,
+    "VersionName": "1.2.0",
+    "FriendlyName": "Arcade Feature",
+    "Description": "Feature plugin for arcade gameplay mechanics",
+    "Category": "Gameplay",
+    "CreatedBy": "EnigmaEngine",
+    "CreatedByURL": "https://enigmaengine.com",
+    "CanContainContent": true,
+    "Modules": [
+        {
+            "Name": "ArcadeFeature",
+            "Type": "Runtime",
+            "LoadingPhase": "PostEngineInit"
+        },
+        {
+            "Name": "ArcadeFeatureEditor",
+            "Type": "Editor",
+            "LoadingPhase": "Default"
+        }
+    ],
+    "Plugins": [
+        {
+            "Name": "CoreUtils",
+            "Enabled": true
+        },
+        {
+            "Name": "InputSystem",
+            "Enabled": false
+        }
+    ]
+}

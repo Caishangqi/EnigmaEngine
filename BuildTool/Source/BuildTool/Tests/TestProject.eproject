@@ -1,0 +1,30 @@
+{
+    "FileVersion": 1,
+    "EngineAssociation": "0.1.0",
+    "Modules": [
+        {
+            "Name": "TestGame",
+            "Type": "Runtime",
+            "LoadingPhase": "Default",
+            "AdditionalDependencies": [
+                "Engine",
+                "Core"
+            ]
+        },
+        {
+            "Name": "TestGameplay",
+            "Type": "Runtime",
+            "LoadingPhase": "PostEngineInit"
+        }
+    ],
+    "Plugins": [
+        {
+            "Name": "TestPlugin",
+            "Enabled": true
+        },
+        {
+            "Name": "DisabledPlugin",
+            "Enabled": false
+        }
+    ]
+}

@@ -1,0 +1,13 @@
+{
+    "FileVersion": 1,
+    "FriendlyName": "PLUGIN_NAME",
+    "Description": "PLUGIN_NAME plugin for EnigmaEngine",
+    "Category": "PLUGIN_CATEGORY",
+    "Modules": [
+        {
+            "Name": "PLUGIN_NAME",
+            "Type": "Runtime",
+            "LoadingPhase": "PostEngineInit"
+        }
+    ]
+}

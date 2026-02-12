@@ -1,0 +1,5 @@
+{
+    "FileVersion": 1,
+    "FriendlyName": "Empty Plugin",
+    "Description": "A minimal plugin with no modules or dependencies"
+}

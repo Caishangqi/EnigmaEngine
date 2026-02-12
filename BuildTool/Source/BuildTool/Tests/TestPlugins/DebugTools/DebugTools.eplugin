@@ -1,0 +1,13 @@
+{
+    "FileVersion": 1,
+    "FriendlyName": "Debug Tools",
+    "Description": "Developer-only debug utilities",
+    "Category": "Developer",
+    "Modules": [
+        {
+            "Name": "DebugTools",
+            "Type": "Developer",
+            "LoadingPhase": "PostEngineInit"
+        }
+    ]
+}
