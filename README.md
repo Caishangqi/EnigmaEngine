@@ -1,7 +1,7 @@
 <p align="center"><img src="https://github.com/user-attachments/assets/12663581-fb81-4364-96d6-36e57d6cfd4f" alt="Logo" width="300"></p>
 
 <h1 align="center"> Enigma Engine </h1>
-<h4 align="center">A modern, progressive, lightweight 2D / 3D engine focused on voxel games, developing in a modular fashion.</h4>
+<h4 align="center">A modern, progressive, lightweight modular game engine for voxel game development</h4>
 <p align="center">
 <a href="https://www.codefactor.io/repository/github/caishangqi/EnigmaEngine"><img src="https://www.codefactor.io/repository/github/caishangqi/EnigmaEngine/badge" alt="CodeFactor" /></a>
 <img alt="Renderer Backend" src="https://img.shields.io/badge/Render API-ASCII-242629">
@@ -11,39 +11,118 @@
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/Caishangqi/EnigmaEngine">
 </p>
 
+<p align="center"><a href="README_ZH.md">中文文档</a></p>
+
 ## Overview
 
-Enigma Engine is a 3D and 2D game engine designed from the ground up for voxel game development and scalable projects, allowing users to develop in a modular fashion and supporting plugins. It
-provides a dedicated voxel-based render pipeline and tools for game design without
-compromising resource efficiency.
+Enigma Engine is a C++ game engine designed from the ground up for voxel game development. It features a modular architecture with runtime DLL loading/unloading, a plugin system, and multi-configuration builds. The engine ships with a complete project scaffolding toolchain -- from project creation to shipping -- all driven by the BuildTool CLI.
 
-## Feature
+## Features
 
-> Description of the feature here. This could be a feature that adds new functionality, improves existing features, or enhances the overall performance of the engine.
+- Modular architecture: engine, game logic, and plugins run as independent DLL modules with dynamic loading and dependency management
+- Plugin system: plugins defined via `.eplugin` descriptors with loading phase control, auto-discovery, and dependency checking
+- Project scaffolding: one-command creation of projects, modules, and plugins with auto-generated template code and configuration
+- Multi-configuration builds: Debug / DebugGame / Development / Shipping / Test
+- Visual Studio integration: auto-generated `.sln` and `.vcxproj` project files
+- Unreal-style API: familiar naming conventions and architectural patterns (ModuleRules, TargetRules, GameInstance)
 
-## Planned Feature
+## Planned Features
 
-- Introducing the Game Editor that can hot reload game module and plugin dlls.
-- Introducing a rough ASCII Renderer with 720p
-- Integrate the build action such as `create-module`, `create-plugin` into Game Editor.
+- Game Editor with hot-reload support for game module and plugin DLLs
+- ASCII-based 720p renderer
+- Integration of `create-module`, `create-plugin` and other build actions into the Game Editor
 
-## Easy To Build
+## Building
 
-### Build Tools
+### Prerequisites
+
+- C++23 compiler (MSVC 17 2022 or later)
+- CMake 3.20+
+- .NET 8.0 SDK (for BuildTool)
+
+### BuildTool
+
+### BuildTool
+
+BuildTool is a C# .NET 8 CLI that handles project scanning, dependency resolution, CMake generation, compilation, and packaging.
+
+```bash
+# Build project (defaults to Development configuration)
+BuildTool build <project-path>
+
+# Specify build configuration
+BuildTool build <project-path> -c DebugGame
+BuildTool build <project-path> -c Shipping
+
+# Clean / Rebuild
+BuildTool clean <project-path>
+BuildTool rebuild <project-path>
+
+# Generate Visual Studio solution
+BuildTool generate-project-files <project-path>
+
+# Package for distribution (forces Shipping configuration)
+BuildTool package <project-path> -o <output-path>
+```
+
+### Project Scaffolding
+
+```bash
+# Create a new game project
+BuildTool create-project --name MyGame --location ./Games
+
+# Create a game module
+BuildTool create-module <project-path> --name GameUtils
+
+# Create a plugin
+BuildTool create-plugin <project-path> --name MyFeature --category Gameplay
+
+# Remove a module (with dependency checking)
+BuildTool remove-module <project-path> --name GameUtils
+
+# Remove a plugin
+BuildTool remove-plugin <project-path> --name MyFeature
+```
+
+### Build Configurations
+
+| Configuration | Description | Link Mode | Optimization |
+|---------------|:-----------:|:---------:|:------------:|
+| `Debug` | Full debug, no optimization | Modular (DLL) | /Od |
+| `DebugGame` | Engine optimized, game debuggable | Modular (DLL) | /O1 |
+| `Development` | Development build, moderate optimization | Modular (DLL) | /O1 |
+| `Shipping` | Release build, full optimization | Monolithic (static) | /O2 |
+| `Test` | Automated test build | Modular (DLL) | /O2 |
 
 ## Modules
 
-| **Name**         |                      **Description**                      | **State** |
-|------------------|:---------------------------------------------------------:|:---------:|
-| `Enigma::Core`   |    The Core structure and classes that used in engine     |  stable   |
-| `Enigma::Engine` | The Global Engine variable and Engine loop implementation |  stable   |
-| `Enigma::Launch` |               The Guadian main entry point                |  stable   |
+| **Name** | **Description** | **Status** |
+|----------|:---------------:|:----------:|
+| `Enigma::Core` | Foundation module providing the module system, logging, assertions, and HAL platform abstraction with zero external dependencies | stable |
+| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine, FGameInstance, and module loading phase management | stable |
+| `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
 
 ## Third Party
 
-| **Name**         |   **Description**   |                  **Link**                  |
-|------------------|:-------------------:|:------------------------------------------:|
+| **Name** | **Description** | **Link** |
+|----------|:---------------:|:--------:|
 | `nlohmann::json` | JSON for Modern C++ | [Github](https://github.com/nlohmann/json) |
+
+## Project Structure
+
+```
+EnigmaEngine/
+  Engine/
+    Source/Runtime/         Runtime modules (Core, Engine, Launch)
+    Source/ThirdParty/      Third-party libraries (nlohmann_json)
+    Templates/              Project / Module / Plugin code templates
+  BuildTool/                C# .NET build tool
+  Games/
+    EnigmaArcade/           Example game project
+      Source/               Game module sources
+      Plugins/              Game plugins
+  Tests/                    Phased integration test projects
+```
 
 <p>&nbsp;
 </p>
@@ -51,13 +130,13 @@ compromising resource efficiency.
 <p align="center">
 <a href="https://github.com/Caishangqi/EnigmaEngine/issues">
 <img src="https://i.imgur.com/qPmjSXy.png" width="160" />
-</a> 
+</a>
 <a href="https://github.com/Caishangqi/EnigmaEngine">
 <img src="https://i.imgur.com/L1bU9mr.png" width="160" />
 </a>
 <a href="[https://discord.gg/3rPcYrPnAs](https://discord.gg/3rPcYrPnAs)">
 <img src="https://i.imgur.com/uf6V9ZX.png" width="160" />
-</a> 
+</a>
 <a href="https://github.com/Caishangqi">
 <img src="https://i.imgur.com/fHQ45KR.png" width="227" />
 </a>
