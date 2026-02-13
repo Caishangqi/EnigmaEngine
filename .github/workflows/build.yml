@@ -1,0 +1,137 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Stage 1: Build the BuildTool and run unit tests
+  # ---------------------------------------------------------------------------
+  buildtool:
+    name: BuildTool
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build BuildTool
+        run: dotnet build BuildTool/BuildTool.sln -c Release
+
+      - name: Run unit tests
+        shell: pwsh
+        run: |
+          $bt = "BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
+          $tests = @(
+            "module-parser"
+            "dependency-resolver"
+            "cmake-generator"
+            "plugin-parser"
+            "plugin-scanner"
+            "thirdparty-scanner"
+            "manifest-generator"
+            "guid-generator"
+            "module-api-header-generator"
+            "vcxproj-generator"
+            "solution-generator"
+            "project-scanner"
+            "name-validator"
+            "template-engine"
+            "eproject-modifier"
+            "target-file-modifier"
+            "dependency-checker"
+          )
+          $failed = @()
+          foreach ($t in $tests) {
+            Write-Host "--- $t ---" -ForegroundColor Cyan
+            & $bt test $t
+            if ($LASTEXITCODE -ne 0) { $failed += $t }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Host "`nFailed: $($failed -join ', ')" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Upload BuildTool artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildtool
+          path: BuildTool/Source/BuildTool/bin/Release/net9.0/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: Build the example game project (EnigmaArcade)
+  # ---------------------------------------------------------------------------
+  build-enigma-arcade:
+    name: EnigmaArcade (${{ matrix.config }})
+    needs: buildtool
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [ DebugGame, Development, Shipping ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download BuildTool
+        uses: actions/download-artifact@v4
+        with:
+          name: buildtool
+          path: BuildTool/Source/BuildTool/bin/Release/net9.0/
+
+      - name: Build EnigmaArcade (${{ matrix.config }})
+        shell: pwsh
+        run: |
+          $bt = "BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
+          & $bt clean Games/EnigmaArcade
+          & $bt build Games/EnigmaArcade -c ${{ matrix.config }}
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          $binDir = "Games/EnigmaArcade/Binaries/Win64"
+          if (-not (Test-Path $binDir)) {
+            Write-Host "Binaries directory not found: $binDir" -ForegroundColor Red
+            exit 1
+          }
+          $exes = Get-ChildItem -Path $binDir -Filter "*.exe" -ErrorAction SilentlyContinue
+          if ($exes.Count -eq 0) {
+            Write-Host "No executables found in $binDir" -ForegroundColor Red
+            exit 1
+          }
+          Write-Host "Build output:" -ForegroundColor Green
+          Get-ChildItem -Path $binDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: Full scaffolding + build integration test
+  # ---------------------------------------------------------------------------
+  scaffolding-build:
+    name: Scaffolding Build Integration
+    needs: buildtool
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download BuildTool
+        uses: actions/download-artifact@v4
+        with:
+          name: buildtool
+          path: BuildTool/Source/BuildTool/bin/Release/net9.0/
+
+      - name: Run scaffolding-build-integration test
+        shell: pwsh
+        run: |
+          $bt = "BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
+          & $bt test scaffolding-build-integration
+          if ($LASTEXITCODE -ne 0) { exit 1 }
