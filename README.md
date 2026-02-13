@@ -42,8 +42,6 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 
 ### BuildTool
 
-### BuildTool
-
 BuildTool is a C# .NET 8 CLI that handles project scanning, dependency resolution, CMake generation, compilation, and packaging.
 
 ```bash
