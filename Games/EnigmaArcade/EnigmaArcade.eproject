@@ -1,0 +1,22 @@
+{
+    "FileVersion": 1,
+    "EngineAssociation": "1.0.0",
+    "Modules": [
+        {
+            "Name": "EnigmaArcade",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        },
+        {
+            "Name": "ArcadeGameplay",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        }
+    ],
+    "Plugins": [
+        {
+            "Name": "ArcadeFeature",
+            "Enabled": true
+        }
+    ]
+}
