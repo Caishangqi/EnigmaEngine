@@ -1,0 +1,13 @@
+{
+    "FileVersion": 1,
+    "FriendlyName": "Arcade Feature",
+    "Description": "Feature extension plugin for EnigmaArcade",
+    "Category": "Gameplay",
+    "Modules": [
+        {
+            "Name": "ArcadeFeature",
+            "Type": "Runtime",
+            "LoadingPhase": "PostEngineInit"
+        }
+    ]
+}
