@@ -68,6 +68,46 @@ public sealed class DependencyResolver
     }
 
     /// <summary>
+    /// Compute the set of modules transitively reachable from the given root modules.
+    /// Uses BFS through the adjacency list (module -> its dependencies).
+    /// </summary>
+    /// <param name="roots">Root module names to start traversal from.</param>
+    /// <param name="adjacency">Adjacency list mapping module -> [dependencies].</param>
+    /// <returns>HashSet of all reachable module names (including roots themselves).</returns>
+    public static HashSet<string> ComputeReachableSet(
+        IEnumerable<string> roots,
+        IReadOnlyDictionary<string, List<string>> adjacency)
+    {
+        var reachable = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<string>();
+
+        foreach (var root in roots)
+        {
+            if (adjacency.ContainsKey(root) && reachable.Add(root))
+            {
+                queue.Enqueue(root);
+            }
+        }
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (!adjacency.TryGetValue(current, out var deps))
+                continue;
+
+            foreach (var dep in deps)
+            {
+                if (adjacency.ContainsKey(dep) && reachable.Add(dep))
+                {
+                    queue.Enqueue(dep);
+                }
+            }
+        }
+
+        return reachable;
+    }
+
+    /// <summary>
     /// Build an adjacency list from module rules.
     /// Merges Public and Private dependencies into a single edge list per module.
     /// </summary>

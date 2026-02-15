@@ -20,6 +20,9 @@ public static class DependencyResolverTest
         TestSelfCycle();
         TestNoModules();
         TestPerformance();
+        TestReachableSetBasic();
+        TestReachableSetMultipleRoots();
+        TestReachableSetEmpty();
 
         Console.WriteLine();
         Console.WriteLine("=== All tests passed ===");
@@ -192,6 +195,118 @@ public static class DependencyResolverTest
         Assert(result.BuildOrder[^1] == $"Module_{moduleCount - 1:D4}", $"Last module should be Module_{moduleCount - 1:D4}");
 
         Console.WriteLine($"  PASSED ({moduleCount} modules resolved in {sw.ElapsedMilliseconds}ms)");
+    }
+
+    /// <summary>
+    /// Reachable set: Launch -> Engine -> Core, googletest isolated.
+    /// From root {Launch}, reachable = {Launch, Engine, Core}.
+    /// </summary>
+    private static void TestReachableSetBasic()
+    {
+        Console.WriteLine("[Test 7] ComputeReachableSet: basic reachability");
+
+        var modules = new Dictionary<string, ModuleRules>
+        {
+            ["Core"] = new() { ModuleName = "Core" },
+            ["Engine"] = new()
+            {
+                ModuleName = "Engine",
+                PublicDependencyModuleNames = { "Core" },
+            },
+            ["Launch"] = new()
+            {
+                ModuleName = "Launch",
+                PublicDependencyModuleNames = { "Engine" },
+            },
+            ["googletest"] = new() { ModuleName = "googletest" },
+        };
+
+        var result = new DependencyResolver().Resolve(modules);
+        Assert(result.Success, $"Expected success, got error: {result.Error}");
+
+        var reachable = DependencyResolver.ComputeReachableSet(
+            new[] { "Launch" }, result.AdjacencyList);
+
+        Assert(reachable.Contains("Launch"), "Launch should be reachable");
+        Assert(reachable.Contains("Engine"), "Engine should be reachable");
+        Assert(reachable.Contains("Core"), "Core should be reachable");
+        Assert(!reachable.Contains("googletest"), "googletest should NOT be reachable");
+        Assert(reachable.Count == 3, $"Reachable count: expected 3, got {reachable.Count}");
+
+        Console.WriteLine($"  PASSED (reachable: {string.Join(", ", reachable)})");
+    }
+
+    /// <summary>
+    /// Multiple roots with shared dependencies.
+    /// GameA -> Engine -> Core, GameB -> Core, TestLib isolated.
+    /// From roots {GameA, GameB}, reachable = {GameA, GameB, Engine, Core}.
+    /// </summary>
+    private static void TestReachableSetMultipleRoots()
+    {
+        Console.WriteLine("[Test 8] ComputeReachableSet: multiple roots, shared deps");
+
+        var modules = new Dictionary<string, ModuleRules>
+        {
+            ["Core"] = new() { ModuleName = "Core" },
+            ["Engine"] = new()
+            {
+                ModuleName = "Engine",
+                PublicDependencyModuleNames = { "Core" },
+            },
+            ["GameA"] = new()
+            {
+                ModuleName = "GameA",
+                PublicDependencyModuleNames = { "Engine" },
+            },
+            ["GameB"] = new()
+            {
+                ModuleName = "GameB",
+                PublicDependencyModuleNames = { "Core" },
+            },
+            ["TestLib"] = new()
+            {
+                ModuleName = "TestLib",
+                PublicDependencyModuleNames = { "Core" },
+            },
+        };
+
+        var result = new DependencyResolver().Resolve(modules);
+        Assert(result.Success, $"Expected success, got error: {result.Error}");
+
+        var reachable = DependencyResolver.ComputeReachableSet(
+            new[] { "GameA", "GameB" }, result.AdjacencyList);
+
+        Assert(reachable.Contains("GameA"), "GameA should be reachable");
+        Assert(reachable.Contains("GameB"), "GameB should be reachable");
+        Assert(reachable.Contains("Engine"), "Engine should be reachable (via GameA)");
+        Assert(reachable.Contains("Core"), "Core should be reachable (via both)");
+        Assert(!reachable.Contains("TestLib"), "TestLib should NOT be reachable");
+        Assert(reachable.Count == 4, $"Reachable count: expected 4, got {reachable.Count}");
+
+        Console.WriteLine("  PASSED");
+    }
+
+    /// <summary>
+    /// Empty roots: reachable set should be empty.
+    /// </summary>
+    private static void TestReachableSetEmpty()
+    {
+        Console.WriteLine("[Test 9] ComputeReachableSet: empty roots");
+
+        var modules = new Dictionary<string, ModuleRules>
+        {
+            ["Core"] = new() { ModuleName = "Core" },
+        };
+
+        var result = new DependencyResolver().Resolve(modules);
+        Assert(result.Success, $"Expected success, got error: {result.Error}");
+
+        var reachable = DependencyResolver.ComputeReachableSet(
+            Array.Empty<string>(), result.AdjacencyList);
+
+        Assert(reachable.Count == 0, $"Reachable count: expected 0, got {reachable.Count}");
+
+        Console.WriteLine("  PASSED");
     }
 
     private static void Assert(bool condition, string message)

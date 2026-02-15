@@ -3,6 +3,7 @@
 namespace BuildTool.Build;
 
 using System.Diagnostics;
+using BuildTool.Analysis;
 using BuildTool.Generators;
 using BuildTool.Models;
 
@@ -129,17 +130,56 @@ public sealed class BuildPipeline
     /// Generate CMakeLists.txt content via CMakeGenerator.
     /// Uses the engine target (Launch module with main()) for executable determination.
     /// Falls back to game target if no engine target exists (e.g. minimal test projects).
+    /// Filters modules to only include those reachable from the project's root modules
+    /// (game modules + plugin modules + target entry points).
     /// </summary>
     private static CMakeGenerator.GenerateResult GenerateCMake(
         ProjectScanner.ScanResult scan, BuildConfiguration config, string platform)
     {
+        var targetRules = scan.EngineTarget ?? scan.GameTarget;
+
+        // Compute root modules: game + plugin + executable entry points
+        var roots = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var name in scan.GameModules.Keys)
+            roots.Add(name);
+
+        foreach (var name in scan.PluginScanResult.Modules.Keys)
+            roots.Add(name);
+
+        if (targetRules is not null)
+        {
+            foreach (var name in targetRules.ExtraModuleNames)
+                roots.Add(name);
+        }
+
+        foreach (var name in scan.GameTarget.ExtraModuleNames)
+            roots.Add(name);
+
+        // Filter to only reachable modules via dependency graph BFS
+        var reachable = DependencyResolver.ComputeReachableSet(
+            roots, scan.ResolveResult.AdjacencyList);
+
+        var filteredModules = new Dictionary<string, ModuleRules>(StringComparer.Ordinal);
+        foreach (var (name, rules) in scan.AllModules)
+        {
+            if (reachable.Contains(name))
+                filteredModules[name] = rules;
+        }
+
+        var excluded = scan.AllModules.Keys.Where(k => !reachable.Contains(k)).ToList();
+        if (excluded.Count > 0)
+        {
+            Console.WriteLine($"  Filtered {excluded.Count} unreachable module(s): {string.Join(", ", excluded)}");
+        }
+
         var generator = new CMakeGenerator();
         return generator.Generate(
             scan.ProjectName,
-            scan.AllModules,
+            filteredModules,
             scan.ResolveResult,
             scan.ProjectRoot,
-            scan.EngineTarget ?? scan.GameTarget,
+            targetRules,
             config,
             platform);
     }
