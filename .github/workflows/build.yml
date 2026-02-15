@@ -19,6 +19,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Setup .NET 9.0
         uses: actions/setup-dotnet@v4
@@ -82,6 +84,8 @@ jobs:
         config: [ DebugGame, Development, Shipping ]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Download BuildTool
         uses: actions/download-artifact@v4
@@ -122,6 +126,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Download BuildTool
         uses: actions/download-artifact@v4
@@ -135,3 +141,24 @@ jobs:
           $bt = "BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
           & $bt test scaffolding-build-integration
           if ($LASTEXITCODE -ne 0) { exit 1 }
+
+  # ---------------------------------------------------------------------------
+  # Stage 4: C++ Unit Tests (Core Math)
+  # ---------------------------------------------------------------------------
+  cpp-unit-tests:
+    name: C++ Unit Tests
+    needs: buildtool
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Configure CMake
+        run: cmake -B build -S Tests/CoreMathTests
+
+      - name: Build Tests
+        run: cmake --build build --config Release
+
+      - name: Run Tests
+        run: ctest --test-dir build --output-on-failure -C Release
