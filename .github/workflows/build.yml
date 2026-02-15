@@ -143,10 +143,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
   # ---------------------------------------------------------------------------
-  # Stage 4: C++ Unit Tests (Core Math)
+  # Stage 4: C++ Unit Tests
   # ---------------------------------------------------------------------------
   cpp-unit-tests:
-    name: C++ Unit Tests
+    name: Core.Math
     needs: buildtool
     runs-on: windows-latest
     steps:
@@ -161,4 +161,4 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Run Tests
-        run: ctest --test-dir build --output-on-failure -C Release
+        run: ctest --test-dir build --output-on-failure -C Release -V
