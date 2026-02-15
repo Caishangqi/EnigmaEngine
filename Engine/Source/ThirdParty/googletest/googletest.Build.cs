@@ -17,6 +17,8 @@ public class googletest : ModuleRules
 {
     public googletest()
     {
+        Type = ModuleType.DeveloperTool;
+
         // Expose gtest and gmock public headers so that dependents
         // can write #include <gtest/gtest.h> and #include <gmock/gmock.h>
         PublicIncludePaths.Add("source/googletest/include");
