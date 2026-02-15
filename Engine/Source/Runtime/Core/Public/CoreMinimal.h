@@ -29,3 +29,17 @@
 #include "Modules/ModuleInitializerEntry.h"
 #include "Modules/ModuleMacros.h"
 #include "Modules/ModuleManager.h"
+
+// Math (ordered by dependency layer)
+#include "Math/MathFwd.h"
+#include "Math/MathUtility.h"
+#include "Math/Vector2D.h"
+#include "Math/Color.h"
+#include "Math/LinearColor.h"
+#include "Math/Vector.h"
+#include "Math/IntVector.h"
+#include "Math/Vector4.h"
+#include "Math/Quat.h"
+#include "Math/Matrix.h"
+#include "Math/Rotator.h"
+#include "Math/Transform.h"
