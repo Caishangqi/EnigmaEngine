@@ -1,0 +1,104 @@
+# =============================================================================
+# EnigmaEngine .gitignore
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# C++ Build Outputs
+# -----------------------------------------------------------------------------
+Binaries/
+Intermediate/
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# C++ object files and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.pch
+*.pch.gch
+
+# Executables and DLLs
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+
+# -----------------------------------------------------------------------------
+# C# / .NET (BuildTool)
+# -----------------------------------------------------------------------------
+bin/
+obj/
+*.nupkg
+*.snupkg
+
+# -----------------------------------------------------------------------------
+# Generated Project Files (by BuildTool generate-project-files)
+# -----------------------------------------------------------------------------
+# Game project .sln and .vcxproj are generated, not source.
+# BuildTool/BuildTool.sln is source and explicitly tracked via git add -f.
+Games/**/*.sln
+Games/**/*.vcxproj
+Games/**/*.vcxproj.filters
+Games/**/*.vcxproj.user
+Games/**/CMakeLists.txt
+
+Tests/**/*.sln
+Tests/**/*.vcxproj
+Tests/**/*.vcxproj.filters
+Tests/**/*.vcxproj.user
+Tests/**/CMakeLists.txt
+
+# -----------------------------------------------------------------------------
+# IDE / Editor
+# -----------------------------------------------------------------------------
+# JetBrains (Rider, CLion, IntelliJ)
+.idea/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# VS Code
+.vscode/
+
+# -----------------------------------------------------------------------------
+# Runtime / Saved
+# -----------------------------------------------------------------------------
+Saved/
+
+# -----------------------------------------------------------------------------
+# OS Files
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# Windows null device artifact
+nul
+
+# -----------------------------------------------------------------------------
+# Reference Projects (local symlinks, machine-specific)
+# -----------------------------------------------------------------------------
+Reference/
+
+# -----------------------------------------------------------------------------
+# Tool-specific
+# -----------------------------------------------------------------------------
+.claude/
+.serena/
+.spec-workflow/
+.mcp.json
+shrimp_data/
