@@ -35,6 +35,13 @@ public sealed class ModuleRules
     public bool IsHeaderOnly { get; set; }
 
     /// <summary>
+    /// Module type classification. Runtime modules are included in game builds;
+    /// DeveloperTool modules are for testing/development only.
+    /// Default is Runtime.
+    /// </summary>
+    public ModuleType Type { get; set; } = ModuleType.Runtime;
+
+    /// <summary>
     /// Absolute path to the module's root directory.
     /// For header-only modules, include paths are resolved relative to this directory.
     /// Derived from SourceFilePath if not explicitly set.

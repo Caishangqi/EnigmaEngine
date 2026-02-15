@@ -1,3 +1,4 @@
+using BuildTool.Models;
 using BuildTool.Parsers;
 
 namespace BuildTool.Tests;
@@ -18,6 +19,7 @@ public static class ModuleParserTest
         TestEmptyModule(Path.Combine(testDir, "EmptyModule.Build.cs"));
         TestUnrealReference();
         TestFileNotFound();
+        TestModuleTypeProperty();
 
         Console.WriteLine();
         Console.WriteLine("=== All tests passed ===");
@@ -114,6 +116,55 @@ public static class ModuleParserTest
         {
             Console.WriteLine("  PASSED (caught FileNotFoundException)");
         }
+    }
+
+    private static void TestModuleTypeProperty()
+    {
+        Console.WriteLine("[Test 5] ModuleType property parsing");
+
+        var thirdPartyRoot = ResolveThirdPartyRoot();
+        if (thirdPartyRoot is null)
+        {
+            Console.WriteLine("  SKIPPED (ThirdParty directory not found)");
+            return;
+        }
+
+        var gtestPath = Path.Combine(thirdPartyRoot, "googletest", "googletest.Build.cs");
+        if (!File.Exists(gtestPath))
+        {
+            Console.WriteLine("  SKIPPED (googletest.Build.cs not found)");
+            return;
+        }
+
+        var rules = ModuleParser.Parse(gtestPath);
+        Assert(rules.ModuleName == "googletest",
+            $"ModuleName: expected 'googletest', got '{rules.ModuleName}'");
+        Assert(rules.Type == ModuleType.DeveloperTool,
+            $"Type: expected DeveloperTool, got {rules.Type}");
+
+        // nlohmann_json should default to Runtime
+        var jsonPath = Path.Combine(thirdPartyRoot, "nlohmann_json", "nlohmann_json.Build.cs");
+        if (File.Exists(jsonPath))
+        {
+            var jsonRules = ModuleParser.Parse(jsonPath);
+            Assert(jsonRules.Type == ModuleType.Runtime,
+                $"nlohmann_json Type: expected Runtime, got {jsonRules.Type}");
+        }
+
+        Console.WriteLine("  PASSED");
+    }
+
+    private static string? ResolveThirdPartyRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "Engine", "Source", "ThirdParty");
+            if (Directory.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+        return null;
     }
 
     private static void Assert(bool condition, string message)

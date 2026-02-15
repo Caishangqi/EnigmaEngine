@@ -27,6 +27,10 @@ public static partial class ModuleParser
     [GeneratedRegex(@"""([^""]+)""", RegexOptions.Compiled)]
     private static partial Regex QuotedStringRegex();
 
+    // Matches: Type = ModuleType.DeveloperTool;  (property assignment)
+    [GeneratedRegex(@"Type\s*=\s*ModuleType\.(\w+)\s*;", RegexOptions.Compiled)]
+    private static partial Regex ModuleTypeAssignmentRegex();
+
     // Known list properties we extract from .Build.cs files.
     private static readonly HashSet<string> KnownListProperties = new(StringComparer.Ordinal)
     {
@@ -91,6 +95,14 @@ public static partial class ModuleParser
 
         if (listValues.TryGetValue("DynamicallyLoadedModuleNames", out var dynLoad))
             rules.DynamicallyLoadedModuleNames.AddRange(dynLoad);
+
+        // Extract ModuleType assignment (if present)
+        var typeMatch = ModuleTypeAssignmentRegex().Match(cleanSource);
+        if (typeMatch.Success &&
+            Enum.TryParse<ModuleType>(typeMatch.Groups[1].Value, out var moduleType))
+        {
+            rules.Type = moduleType;
+        }
 
         return rules;
     }
