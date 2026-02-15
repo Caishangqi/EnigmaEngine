@@ -5,8 +5,8 @@
 <p align="center">
 <a href="https://www.codefactor.io/repository/github/caishangqi/EnigmaEngine"><img src="https://www.codefactor.io/repository/github/caishangqi/EnigmaEngine/badge" alt="CodeFactor" /></a>
 <img alt="Renderer Backend" src="https://img.shields.io/badge/Render API-ASCII-242629">
-<img alt="C++ Language Level" src="https://img.shields.io/badge/C++-23-cherry">
-<img alt="Dot Net" src="https://img.shields.io/badge/.Net-8.0-573ccf">
+<img alt="C++ Language Level" src="https://img.shields.io/badge/C++-26-cherry">
+<img alt="Dot Net" src="https://img.shields.io/badge/.Net-9.0-573ccf">
 <img alt="GitHub branch checks state" src="https://img.shields.io/github/checks-status/Caishangqi/EnigmaEngine/master?label=build">
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/Caishangqi/EnigmaEngine">
 </p>
@@ -25,6 +25,7 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - Multi-configuration builds: Debug / DebugGame / Development / Shipping / Test
 - Visual Studio integration: auto-generated `.sln` and `.vcxproj` project files
 - Unreal-style API: familiar naming conventions and architectural patterns (ModuleRules, TargetRules, GameInstance)
+- Core math library: FVector, FMatrix, FQuat, FRotator, FTransform and more, right-hand Y-up coordinate system, constexpr-friendly
 
 ## Planned Features
 
@@ -36,13 +37,13 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 
 ### Prerequisites
 
-- C++23 compiler (MSVC 17 2022 or later)
+- C++26 compiler (MSVC 17 2022 or later)
 - CMake 3.20+
-- .NET 8.0 SDK (for BuildTool)
+- .NET 9.0 SDK (for BuildTool)
 
 ### BuildTool
 
-BuildTool is a C# .NET 8 CLI that handles project scanning, dependency resolution, CMake generation, compilation, and packaging.
+BuildTool is a C# .NET 9 CLI that handles project scanning, dependency resolution, CMake generation, compilation, and packaging.
 
 ```bash
 # Build project (defaults to Development configuration)
@@ -96,7 +97,7 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 | **Name** | **Description** | **Status** |
 |----------|:---------------:|:----------:|
-| `Enigma::Core` | Foundation module providing the module system, logging, assertions, and HAL platform abstraction with zero external dependencies | stable |
+| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, and core math types (FVector, FMatrix, FQuat, FRotator, FTransform) | stable |
 | `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine, FGameInstance, and module loading phase management | stable |
 | `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
 
@@ -105,6 +106,7 @@ BuildTool remove-plugin <project-path> --name MyFeature
 | **Name** | **Description** | **Link** |
 |----------|:---------------:|:--------:|
 | `nlohmann::json` | JSON for Modern C++ | [Github](https://github.com/nlohmann/json) |
+| `Google Test` | C++ unit testing framework (git submodule) | [Github](https://github.com/google/googletest) |
 
 ## Project Structure
 
@@ -112,14 +114,15 @@ BuildTool remove-plugin <project-path> --name MyFeature
 EnigmaEngine/
   Engine/
     Source/Runtime/         Runtime modules (Core, Engine, Launch)
-    Source/ThirdParty/      Third-party libraries (nlohmann_json)
+    Source/ThirdParty/      Third-party libraries (nlohmann_json, googletest)
     Templates/              Project / Module / Plugin code templates
   BuildTool/                C# .NET build tool
   Games/
     EnigmaArcade/           Example game project
       Source/               Game module sources
       Plugins/              Game plugins
-  Tests/                    Phased integration test projects
+  Tests/
+    CoreMathTests/          Core math unit tests (GoogleTest)
 ```
 
 <p>&nbsp;

@@ -5,8 +5,8 @@
 <p align="center">
 <a href="https://www.codefactor.io/repository/github/caishangqi/EnigmaEngine"><img src="https://www.codefactor.io/repository/github/caishangqi/EnigmaEngine/badge" alt="CodeFactor" /></a>
 <img alt="Renderer Backend" src="https://img.shields.io/badge/Render API-ASCII-242629">
-<img alt="C++ Language Level" src="https://img.shields.io/badge/C++-23-cherry">
-<img alt="Dot Net" src="https://img.shields.io/badge/.Net-8.0-573ccf">
+<img alt="C++ Language Level" src="https://img.shields.io/badge/C++-26-cherry">
+<img alt="Dot Net" src="https://img.shields.io/badge/.Net-9.0-573ccf">
 <img alt="GitHub branch checks state" src="https://img.shields.io/github/checks-status/Caishangqi/EnigmaEngine/master?label=build">
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/Caishangqi/EnigmaEngine">
 </p>
@@ -25,6 +25,7 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - 多配置构建：Debug / DebugGame / Development / Shipping / Test 五种构建配置
 - Visual Studio 集成：自动生成 `.sln` 和 `.vcxproj` 项目文件
 - Unreal 风格 API：熟悉的命名约定和架构模式（ModuleRules、TargetRules、GameInstance）
+- 核心数学库：FVector、FMatrix、FQuat、FRotator、FTransform 等完整 3D 数学类型，右手 Y-up 坐标系，constexpr 友好
 
 ## 计划中的特性
 
@@ -36,13 +37,13 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 
 ### 环境要求
 
-- C++23 编译器（MSVC 17 2022 或更高版本）
+- C++26 编译器（MSVC 17 2022 或更高版本）
 - CMake 3.20+
-- .NET 8.0 SDK（用于 BuildTool）
+- .NET 9.0 SDK（用于 BuildTool）
 
 ### BuildTool
 
-BuildTool 是基于 C# .NET 8 的命令行构建工具，负责项目扫描、依赖解析、CMake 生成、编译和打包。
+BuildTool 是基于 C# .NET 9 的命令行构建工具，负责项目扫描、依赖解析、CMake 生成、编译和打包。
 
 ```bash
 # 构建项目（默认 Development 配置）
@@ -96,7 +97,7 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 | **名称** | **说明** | **状态** |
 |----------|:--------:|:--------:|
-| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL），零外部依赖 | stable |
+| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）和核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform） | stable |
 | `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine、FGameInstance 游戏实例和模块加载阶段管理 | stable |
 | `Enigma::Launch` | 入口点模块，提供 GuardedMain 守护主函数和平台特定启动逻辑（main / WinMain） | stable |
 
@@ -105,6 +106,7 @@ BuildTool remove-plugin <project-path> --name MyFeature
 | **名称** | **说明** | **链接** |
 |----------|:--------:|:--------:|
 | `nlohmann::json` | JSON for Modern C++ | [Github](https://github.com/nlohmann/json) |
+| `Google Test` | C++ 单元测试框架 (git submodule) | [Github](https://github.com/google/googletest) |
 
 ## 项目结构
 
@@ -112,14 +114,15 @@ BuildTool remove-plugin <project-path> --name MyFeature
 EnigmaEngine/
   Engine/
     Source/Runtime/         引擎运行时模块 (Core, Engine, Launch)
-    Source/ThirdParty/      第三方库 (nlohmann_json)
+    Source/ThirdParty/      第三方库 (nlohmann_json, googletest)
     Templates/              项目/模块/插件代码模板
   BuildTool/                C# .NET 构建工具
   Games/
     EnigmaArcade/           示例游戏项目
       Source/               游戏模块源码
       Plugins/              游戏插件
-  Tests/                    分阶段集成测试项目
+  Tests/
+    CoreMathTests/          Core 数学库单元测试 (GoogleTest)
 ```
 
 <p>&nbsp;
