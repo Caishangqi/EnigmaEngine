@@ -161,4 +161,4 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Run Tests
-        run: ctest --test-dir build --output-on-failure -C Release -V
+        run: ctest --test-dir build --output-on-failure -C Release --progress

@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+enable_testing()
+
 if(MSVC)
     add_compile_options(/std:c++latest)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
