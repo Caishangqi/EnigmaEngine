@@ -3,6 +3,7 @@
 #include "EngineLoop.h"
 #include "Engine/Engine.h"
 #include "Engine/GameEngine.h"
+#include "GenericPlatform/GenericApplication.h"
 #include "Modules/ModuleManager.h"
 
 #include <cstdio>
@@ -107,6 +108,9 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
     // Phase 2: PreLoadingScreen (Engine, Renderer)
     LoadModulesForPhase(ELoadingPhase::PreLoadingScreen);
 
+    // Create platform application (ApplicationCore)
+    FGenericApplication::CreateApplication();
+
     std::printf("[FEngineLoop] PreInit complete\n");
     return 0;
 }
@@ -178,6 +182,13 @@ void FEngineLoop::Tick()
 {
     if (!bIsRunning || !GEngine) return;
 
+    // Pump OS messages before game tick
+    if (auto* app = FGenericApplication::GetApplication())
+    {
+        app->PumpMessages(DeltaTime);
+        app->ProcessDeferredEvents(DeltaTime);
+    }
+
     // Calculate DeltaTime
     auto now = Clock::now();
     std::chrono::duration<float> elapsed = now - LastTickTime;
@@ -205,6 +216,12 @@ void FEngineLoop::Exit()
         GEngine->Shutdown();
         delete GEngine;
         GEngine = nullptr;
+    }
+
+    // Destroy platform application (and all windows)
+    if (auto* app = FGenericApplication::GetApplication())
+    {
+        delete app;
     }
 
     // Unload all modules in reverse load-order
