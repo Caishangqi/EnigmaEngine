@@ -26,6 +26,7 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - Visual Studio integration: auto-generated `.sln` and `.vcxproj` project files
 - Unreal-style API: familiar naming conventions and architectural patterns (ModuleRules, TargetRules, GameInstance)
 - Core math library: FVector, FMatrix, FQuat, FRotator, FTransform and more, right-hand Y-up coordinate system, constexpr-friendly
+- Delegate & event system: type-safe TDelegate, TMulticastDelegate with FDelegateHandle lifecycle management, supports static/lambda/member function bindings
 
 ## Planned Features
 
@@ -97,7 +98,8 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 | **Name** | **Description** | **Status** |
 |----------|:---------------:|:----------:|
-| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, and core math types (FVector, FMatrix, FQuat, FRotator, FTransform) | stable |
+| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), and core math types (FVector, FMatrix, FQuat, FRotator, FTransform) | stable |
+| `Enigma::ApplicationCore` | Platform-agnostic application and window abstraction (FGenericApplication, FGenericWindow, FGenericApplicationMessageHandler) with Win32 implementation | stable |
 | `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine, FGameInstance, and module loading phase management | stable |
 | `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
 
@@ -122,7 +124,9 @@ EnigmaEngine/
       Source/               Game module sources
       Plugins/              Game plugins
   Tests/
-    CoreMathTests/          Core math unit tests (GoogleTest)
+    Core.Math.Tests/        Core math unit tests (GoogleTest, 284 tests)
+    Core.Delegates.Tests/   Delegate system unit tests (GoogleTest, 37 tests)
+    ApplicationCore.Tests/  ApplicationCore integration tests (GoogleTest, 20 tests)
 ```
 
 <p>&nbsp;

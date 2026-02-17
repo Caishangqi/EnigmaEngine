@@ -26,6 +26,7 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - Visual Studio 集成：自动生成 `.sln` 和 `.vcxproj` 项目文件
 - Unreal 风格 API：熟悉的命名约定和架构模式（ModuleRules、TargetRules、GameInstance）
 - 核心数学库：FVector、FMatrix、FQuat、FRotator、FTransform 等完整 3D 数学类型，右手 Y-up 坐标系，constexpr 友好
+- 委托与事件系统：类型安全的 TDelegate、TMulticastDelegate，FDelegateHandle 生命周期管理，支持静态/Lambda/成员函数绑定
 
 ## 计划中的特性
 
@@ -97,7 +98,8 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 | **名称** | **说明** | **状态** |
 |----------|:--------:|:--------:|
-| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）和核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform） | stable |
+| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）和核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform） | stable |
+| `Enigma::ApplicationCore` | 平台无关的应用程序和窗口抽象（FGenericApplication、FGenericWindow、FGenericApplicationMessageHandler），含 Win32 实现 | stable |
 | `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine、FGameInstance 游戏实例和模块加载阶段管理 | stable |
 | `Enigma::Launch` | 入口点模块，提供 GuardedMain 守护主函数和平台特定启动逻辑（main / WinMain） | stable |
 
@@ -122,7 +124,9 @@ EnigmaEngine/
       Source/               游戏模块源码
       Plugins/              游戏插件
   Tests/
-    CoreMathTests/          Core 数学库单元测试 (GoogleTest)
+    Core.Math.Tests/        Core 数学库单元测试 (GoogleTest, 284 个测试)
+    Core.Delegates.Tests/   委托系统单元测试 (GoogleTest, 37 个测试)
+    ApplicationCore.Tests/  ApplicationCore 集成测试 (GoogleTest, 20 个测试)
 ```
 
 <p>&nbsp;
