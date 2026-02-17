@@ -1,7 +1,7 @@
-# CoreMathTests: GoogleTest-based unit tests for Core/Math types.
+# Core.Delegates.Tests: GoogleTest-based unit tests for Core/Delegates types.
 # Standalone CMake project, independent from BuildTool module system.
 cmake_minimum_required(VERSION 3.28)
-project(CoreMathTests LANGUAGES CXX)
+project(Core.Delegates.Tests LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -56,16 +56,15 @@ add_subdirectory("${GOOGLETEST_DIR}" "${CMAKE_BINARY_DIR}/googletest")
 # ---------------------------------------------------------------------------
 # Core (SHARED) -- the module under test
 # ---------------------------------------------------------------------------
-# Existing Core sources
 set(CORE_SOURCES
     "${CORE_PRIVATE}/Modules/ModuleInitializerEntry.cpp"
     "${CORE_PRIVATE}/Modules/ModuleManager.cpp"
     "${CORE_PRIVATE}/Logging/LogSystem.cpp"
     "${CORE_PRIVATE}/Misc/AssertionMacros.cpp"
     "${CORE_PRIVATE}/CoreModule.cpp"
+    "${CORE_PRIVATE}/Delegates/DelegateHandle.cpp"
 )
 
-# Math sources (added incrementally by later tasks)
 file(GLOB CORE_MATH_SOURCES "${CORE_PRIVATE}/Math/*.cpp")
 
 add_library(Core SHARED ${CORE_SOURCES} ${CORE_MATH_SOURCES})
@@ -73,18 +72,18 @@ target_include_directories(Core PUBLIC "${CORE_PUBLIC}" "${GENERATED_DIR}")
 target_compile_definitions(Core PRIVATE CORE_EXPORTS)
 
 # ---------------------------------------------------------------------------
-# Test sources (added incrementally by later tasks)
+# Test sources
 # ---------------------------------------------------------------------------
 file(GLOB TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 # ---------------------------------------------------------------------------
-# CoreMathTests (executable, links Core + GoogleTest)
+# CoreDelegateTests (executable, links Core + GoogleTest)
 # ---------------------------------------------------------------------------
-add_executable(CoreMathTests ${TEST_SOURCES})
+add_executable(CoreDelegateTests ${TEST_SOURCES})
 
-target_include_directories(CoreMathTests PRIVATE "${CORE_PUBLIC}")
+target_include_directories(CoreDelegateTests PRIVATE "${CORE_PUBLIC}")
 
-target_link_libraries(CoreMathTests
+target_link_libraries(CoreDelegateTests
     PRIVATE
         Core
         gtest
@@ -96,4 +95,4 @@ target_link_libraries(CoreMathTests
 # CTest integration: `ctest --output-on-failure` from build directory
 # ---------------------------------------------------------------------------
 include(GoogleTest)
-gtest_discover_tests(CoreMathTests)
+gtest_discover_tests(CoreDelegateTests)
