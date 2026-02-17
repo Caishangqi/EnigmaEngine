@@ -11,5 +11,6 @@ public class Engine : ModuleRules
         PrivateIncludePaths.Add("Private");
 
         PublicDependencyModuleNames.Add("Core");
+        PublicDependencyModuleNames.Add("ApplicationCore");
     }
 }
