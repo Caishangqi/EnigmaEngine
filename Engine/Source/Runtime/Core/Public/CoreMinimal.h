@@ -24,6 +24,9 @@
 // Assertion macros
 #include "Misc/AssertionMacros.h"
 
+// Delegate system (forward declarations)
+#include "Delegates/DelegateFwd.h"
+
 // Module system
 #include "Modules/ModuleInterface.h"
 #include "Modules/ModuleInitializerEntry.h"
