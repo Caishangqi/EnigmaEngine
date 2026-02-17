@@ -146,7 +146,7 @@ jobs:
   # Stage 4: C++ Unit Tests
   # ---------------------------------------------------------------------------
   cpp-unit-tests:
-    name: Core.Math
+    name: C++ Unit Tests
     needs: buildtool
     runs-on: windows-latest
     steps:
@@ -154,11 +154,32 @@ jobs:
         with:
           submodules: true
 
-      - name: Configure CMake
-        run: cmake -B build -S Tests/CoreMathTests
+      # -- Core.Math --
+      - name: "Core.Math: Configure"
+        run: cmake -B build-core-math -S Tests/Core.Math.Tests
 
-      - name: Build Tests
-        run: cmake --build build --config Release
+      - name: "Core.Math: Build"
+        run: cmake --build build-core-math --config Release
 
-      - name: Run Tests
-        run: ctest --test-dir build --output-on-failure -C Release --progress
+      - name: "Core.Math: Test"
+        run: ctest --test-dir build-core-math --output-on-failure -C Release --progress
+
+      # -- Core.Delegates --
+      - name: "Core.Delegates: Configure"
+        run: cmake -B build-core-delegates -S Tests/Core.Delegates.Tests
+
+      - name: "Core.Delegates: Build"
+        run: cmake --build build-core-delegates --config Release
+
+      - name: "Core.Delegates: Test"
+        run: ctest --test-dir build-core-delegates --output-on-failure -C Release --progress
+
+      # -- ApplicationCore --
+      - name: "ApplicationCore: Configure"
+        run: cmake -B build-appcore -S Tests/ApplicationCore.Tests
+
+      - name: "ApplicationCore: Build"
+        run: cmake --build build-appcore --config Release
+
+      - name: "ApplicationCore: Test"
+        run: ctest --test-dir build-appcore --output-on-failure -C Release --progress
