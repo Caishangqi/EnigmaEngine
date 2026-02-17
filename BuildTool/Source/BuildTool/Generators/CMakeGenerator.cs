@@ -135,7 +135,7 @@ public sealed class CMakeGenerator
         sb.AppendLine();
         sb.AppendLine("# Enable C++26 draft features per compiler");
         sb.AppendLine("if(MSVC)");
-        sb.AppendLine("    add_compile_options(/std:c++latest)");
+        sb.AppendLine("    add_compile_options(/std:c++latest /Zc:preprocessor)");
         sb.AppendLine("elseif(CMAKE_CXX_COMPILER_ID MATCHES \"GNU|Clang\")");
         sb.AppendLine("    add_compile_options(-std=c++2c)");
         sb.AppendLine("endif()");
