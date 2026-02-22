@@ -94,6 +94,7 @@ set(APPCORE_SOURCES
     "${APPCORE_PRIVATE}/GenericPlatform/GenericApplication.cpp"
     "${APPCORE_PRIVATE}/Windows/WindowsWindow.cpp"
     "${APPCORE_PRIVATE}/Windows/WindowsApplication.cpp"
+    "${APPCORE_PRIVATE}/Windows/ConsoleWindow.cpp"
 )
 
 add_library(ApplicationCore SHARED ${APPCORE_SOURCES})

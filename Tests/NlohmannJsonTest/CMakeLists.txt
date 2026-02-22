@@ -21,3 +21,6 @@ set(NLOHMANN_JSON_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/Third
 # -- TestRunner --
 add_executable(TestRunner Source/Main.cpp)
 target_include_directories(TestRunner PRIVATE "${NLOHMANN_JSON_INCLUDE}")
+
+enable_testing()
+add_test(NAME TestRunner COMMAND $<TARGET_FILE:TestRunner>)
