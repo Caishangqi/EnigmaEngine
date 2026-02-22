@@ -1,0 +1,13 @@
+{
+    "FileVersion": 1,
+    "EngineAssociation": "ENGINE_ROOT_RELATIVE",
+    "Template": "BlankAscii",
+    "Modules": [
+        {
+            "Name": "PROJECT_NAME",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        }
+    ],
+    "Plugins": []
+}

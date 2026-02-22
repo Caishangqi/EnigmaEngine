@@ -1,0 +1,13 @@
+{
+    "FileVersion": 1,
+    "EngineAssociation": "ENGINE_ROOT_RELATIVE",
+    "Template": "BlankDX12",
+    "Modules": [
+        {
+            "Name": "PROJECT_NAME",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        }
+    ],
+    "Plugins": []
+}
