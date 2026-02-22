@@ -1,0 +1,5 @@
+{
+    "DisplayName": "Blank (DirectX 12)",
+    "Description": "Empty game project with native window for DirectX 12 rendering",
+    "Tags": ["game", "dx12", "native"]
+}

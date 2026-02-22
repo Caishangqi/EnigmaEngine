@@ -1,0 +1,5 @@
+{
+    "DisplayName": "Blank (ASCII Art)",
+    "Description": "Empty game project with console window and ASCII rendering loop",
+    "Tags": ["game", "ascii", "console"]
+}
