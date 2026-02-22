@@ -4,19 +4,23 @@
 #include "GameFramework/GameInstance.h"
 #include <cstdint>
 
+namespace Enigma { class FGenericWindow; }
+
 /// Game instance for EnigmaArcade.
-/// Overrides Update() to output an incrementing tick counter,
-/// verifying the game loop is running correctly (REQ-013).
+/// Creates a console window with render-friendly mode for ASCII art output.
+/// Overrides Update() for game logic and Render() for ASCII display.
 class ENIGMAARCADE_API FArcadeGameInstance : public Enigma::FGameInstance
 {
 public:
-    void Init() override;
-    void Update(float deltaTime) override;
-    void Shutdown() override;
+	void Init() override;
+	void Update(float deltaTime) override;
+	void Render() override;
+	void Shutdown() override;
 
-    /// Current tick count (incremented each Update call).
-    uint64_t GetTickCount() const { return TickCount; }
+	/// Current tick count (incremented each Update call).
+	uint64_t GetTickCount() const { return TickCount; }
 
 private:
-    uint64_t TickCount = 0;
+	Enigma::FGenericWindow* m_consoleWindow = nullptr;
+	uint64_t TickCount = 0;
 };
