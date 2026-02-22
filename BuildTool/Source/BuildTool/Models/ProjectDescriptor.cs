@@ -27,4 +27,10 @@ public sealed class ProjectDescriptor
     /// (lower priority than the CLI --output flag).
     /// </summary>
     public string? StagingDirectory { get; init; }
+
+    /// <summary>
+    /// Optional project template variant used to scaffold this project (e.g. "BlankDX12", "BlankAscii").
+    /// Absent in projects created before template support was added.
+    /// </summary>
+    public string? Template { get; init; }
 }
