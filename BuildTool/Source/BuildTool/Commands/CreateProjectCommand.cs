@@ -10,6 +10,8 @@ using BuildTool.Scaffolding;
 /// Creates a new game project from templates. Generates all project files including
 /// .eproject, .Target.cs, game module, and GameInstance. Does NOT call EprojectModifier
 /// or TargetFileModifier — these files come directly from templates.
+/// Supports <c>--template</c> to select a variant and <c>--list-templates</c> to
+/// print all discovered templates.
 /// </summary>
 public sealed class CreateProjectCommand : ICommand
 {
@@ -18,19 +20,35 @@ public sealed class CreateProjectCommand : ICommand
 
     public BuildResult Execute(BuildOptions options)
     {
-        // 1. Parse arguments
+        // 1. Handle --list-templates (early exit)
+        if (options.ExtraArguments.ContainsKey("list-templates"))
+            return ListTemplates();
+
+        // 2. Parse arguments
         if (!options.ExtraArguments.TryGetValue("name", out var projectName) || string.IsNullOrWhiteSpace(projectName))
-            return BuildResult.Fail("--name is required. Usage: create-project --name <ProjectName> --location <path>");
+            return BuildResult.Fail("--name is required. Usage: create-project --name <ProjectName> --location <path> [--template <VariantName>]");
 
         var location = options.ExtraArguments.GetValueOrDefault("location", ".");
+        var templateName = options.ExtraArguments.GetValueOrDefault("template", "Default");
+
+        // Guard against empty --template value (boolean-flag parse)
+        if (string.IsNullOrWhiteSpace(templateName))
+            templateName = "Default";
 
         try
         {
-            // 2. Resolve engine root
+            // 3. Resolve engine root
             Console.WriteLine("[CreateProject] Resolving engine root...");
             var engineRoot = FindEngineRoot();
+            var repoRoot = Path.GetDirectoryName(engineRoot)!;
 
-            // 3. Validate name (empty ExistingNames — new project has no conflicts)
+            // 4. Resolve template
+            Console.WriteLine($"[CreateProject] Resolving template '{templateName}'...");
+            var templateInfo = ProjectTemplateDiscovery.Find(repoRoot, templateName);
+            if (templateInfo is null)
+                return TemplateNotFoundError(repoRoot, templateName);
+
+            // 5. Validate name (empty ExistingNames — new project has no conflicts)
             Console.WriteLine($"[CreateProject] Validating name '{projectName}'...");
             var context = ValidationContext.Create(
                 engineModuleNames: [],
@@ -39,33 +57,34 @@ public sealed class CreateProjectCommand : ICommand
             if (!validation.Success)
                 return BuildResult.Fail(validation.Message);
 
-            // 4. Check directory conflict
+            // 6. Check directory conflict
             if (!Directory.Exists(location))
                 Directory.CreateDirectory(location);
             var projectDir = Path.GetFullPath(Path.Combine(location, projectName));
             if (Directory.Exists(projectDir))
                 return BuildResult.Fail($"Directory already exists: {projectDir}");
 
-            // 5. Compute ENGINE_ROOT_RELATIVE
+            // 7. Compute ENGINE_ROOT_RELATIVE
             var engineRootRelative = Path.GetRelativePath(projectDir, engineRoot)
                 .Replace('\\', '/');
             if (!engineRootRelative.EndsWith('/'))
                 engineRootRelative += '/';
 
-            // 6. Build replacements
+            // 8. Build replacements
             var replacements = new Dictionary<string, string>
             {
                 ["PROJECT_NAME_UPPER"] = projectName.ToUpperInvariant(),
                 ["PROJECT_NAME_API"] = projectName.ToUpperInvariant() + "_API",
                 ["PROJECT_NAME"] = projectName,
                 ["ENGINE_ROOT_RELATIVE"] = engineRootRelative,
+                ["TEMPLATE"] = templateInfo.Name,
             };
 
-            // 7. Scaffold with rollback protection
-            var templateDir = Path.Combine(engineRoot, "Templates", "Project");
+            // 9. Scaffold with rollback protection
+            var templateDir = templateInfo.DirectoryPath;
             using var rollback = new ScaffoldingRollback();
 
-            Console.WriteLine("[CreateProject] Processing templates...");
+            Console.WriteLine($"[CreateProject] Processing templates from '{templateInfo.Name}'...");
             var engine = new TemplateEngine();
             var processResult = engine.Process(new TemplateContext
             {
@@ -84,11 +103,11 @@ public sealed class CreateProjectCommand : ICommand
                 rollback.TrackDirectory(dir);
             rollback.TrackDirectory(projectDir);
 
-            // 8. Commit — prevents rollback on dispose
+            // 10. Commit — prevents rollback on dispose
             rollback.Commit();
             Console.WriteLine("[CreateProject] Changes committed.");
 
-            // 9. Regenerate project files (warn on failure, don't rollback)
+            // 11. Regenerate project files (warn on failure, don't rollback)
             Console.WriteLine("[CreateProject] Regenerating project files...");
             var genOptions = new BuildOptions
             {
@@ -99,9 +118,10 @@ public sealed class CreateProjectCommand : ICommand
             if (!genResult.Success)
                 Console.WriteLine($"[CreateProject] Warning: Project file regeneration failed: {genResult.Message}");
 
-            // 10. Summary
+            // 12. Summary
             Console.WriteLine();
             Console.WriteLine($"Project '{projectName}' created successfully:");
+            Console.WriteLine($"  Template:  {templateInfo.DisplayName} ({templateInfo.Name})");
             Console.WriteLine($"  Directory: {projectDir}");
             Console.WriteLine($"  Files:     {processResult.CreatedFiles.Count}");
             Console.WriteLine();
@@ -115,6 +135,56 @@ public sealed class CreateProjectCommand : ICommand
         {
             return BuildResult.Fail("Project creation failed.", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Lists all available project templates and returns success.
+    /// </summary>
+    private static BuildResult ListTemplates()
+    {
+        try
+        {
+            var engineRoot = FindEngineRoot();
+            var repoRoot = Path.GetDirectoryName(engineRoot)!;
+            var templates = ProjectTemplateDiscovery.Discover(repoRoot);
+
+            if (templates.Count == 0)
+            {
+                Console.WriteLine("No project templates found.");
+                return BuildResult.Ok("No templates found.");
+            }
+
+            Console.WriteLine("Available project templates:");
+            Console.WriteLine();
+            foreach (var t in templates)
+            {
+                var suffix = string.Equals(t.Name, "Default", StringComparison.OrdinalIgnoreCase)
+                    ? " (default)"
+                    : "";
+                Console.WriteLine($"  {t.Name,-20} {t.DisplayName}{suffix}");
+                if (!string.IsNullOrWhiteSpace(t.Description))
+                    Console.WriteLine($"  {"",-20} {t.Description}");
+            }
+
+            return BuildResult.Ok("Templates listed.");
+        }
+        catch (Exception ex)
+        {
+            return BuildResult.Fail("Failed to list templates.", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Returns an error with available templates when the requested template is not found.
+    /// </summary>
+    private static BuildResult TemplateNotFoundError(string repoRoot, string templateName)
+    {
+        var templates = ProjectTemplateDiscovery.Discover(repoRoot);
+        var available = templates.Count > 0
+            ? string.Join(", ", templates.Select(t => t.Name))
+            : "(none)";
+        return BuildResult.Fail(
+            $"Template '{templateName}' not found. Available templates: {available}");
     }
 
     /// <summary>

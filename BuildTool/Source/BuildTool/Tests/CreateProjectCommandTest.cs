@@ -24,6 +24,11 @@ public static class CreateProjectCommandTest
         TestRejectsExistingDirectory();
         TestRejectsInvalidName();
         TestEngineAssociationRelativePath();
+        TestWithoutTemplateUsesDefault();
+        TestWithDX12TemplateUsesCorrectTemplate();
+        TestWithAsciiTemplateUsesCorrectTemplate();
+        TestWithInvalidTemplateReturnsError();
+        TestWithListTemplatesPrintsDiscoveredTemplates();
 
         Console.WriteLine();
         Console.WriteLine("=== All tests passed ===");
@@ -209,6 +214,107 @@ public static class CreateProjectCommandTest
         finally { CleanupDir(location); }
     }
 
+    private static void TestWithoutTemplateUsesDefault()
+    {
+        Console.WriteLine("[Test 9] Without --template uses Default template");
+
+        var location = CreateTempLocation();
+        try
+        {
+            var result = Execute("DefProj", location);
+            Assert(result.Success, $"Expected success: {result.Message}");
+
+            // Default template does not include ApplicationCore in .Build.cs
+            var buildCs = File.ReadAllText(
+                Path.Combine(location, "DefProj", "Source", "DefProj", "DefProj.Build.cs"));
+            Assert(!buildCs.Contains("ApplicationCore"), "Default template should not reference ApplicationCore");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally { CleanupDir(location); }
+    }
+
+    private static void TestWithDX12TemplateUsesCorrectTemplate()
+    {
+        Console.WriteLine("[Test 10] --template BlankDX12 uses DX12 template");
+
+        var location = CreateTempLocation();
+        try
+        {
+            var result = ExecuteWithTemplate("DX12Proj", location, "BlankDX12");
+            Assert(result.Success, $"Expected success: {result.Message}");
+
+            var buildCs = File.ReadAllText(
+                Path.Combine(location, "DX12Proj", "Source", "DX12Proj", "DX12Proj.Build.cs"));
+            Assert(buildCs.Contains("ApplicationCore"), "BlankDX12 template should reference ApplicationCore");
+
+            var header = File.ReadAllText(
+                Path.Combine(location, "DX12Proj", "Source", "DX12Proj", "Public", "DX12ProjGameInstance.h"));
+            Assert(header.Contains("FGenericWindow"), "BlankDX12 GameInstance should reference FGenericWindow");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally { CleanupDir(location); }
+    }
+
+    private static void TestWithAsciiTemplateUsesCorrectTemplate()
+    {
+        Console.WriteLine("[Test 11] --template BlankAscii uses ASCII template");
+
+        var location = CreateTempLocation();
+        try
+        {
+            var result = ExecuteWithTemplate("AsciiProj", location, "BlankAscii");
+            Assert(result.Success, $"Expected success: {result.Message}");
+
+            var source = File.ReadAllText(
+                Path.Combine(location, "AsciiProj", "Source", "AsciiProj", "Private", "AsciiProjGameInstance.cpp"));
+            Assert(source.Contains("EWindowType::Console"), "BlankAscii GameInstance should use EWindowType::Console");
+
+            var eproject = File.ReadAllText(
+                Path.Combine(location, "AsciiProj", "AsciiProj.eproject"));
+            Assert(eproject.Contains("BlankAscii"), ".eproject should contain BlankAscii template reference");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally { CleanupDir(location); }
+    }
+
+    private static void TestWithInvalidTemplateReturnsError()
+    {
+        Console.WriteLine("[Test 12] --template NonExistent returns error with available list");
+
+        var location = CreateTempLocation();
+        try
+        {
+            var result = ExecuteWithTemplate("BadProj", location, "NonExistent");
+            Assert(!result.Success, "Should fail for non-existent template");
+            Assert(result.Message.Contains("NonExistent"), "Error should mention the requested template");
+            Assert(result.Message.Contains("Default"), "Error should list Default as available");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally { CleanupDir(location); }
+    }
+
+    private static void TestWithListTemplatesPrintsDiscoveredTemplates()
+    {
+        Console.WriteLine("[Test 13] --list-templates returns success");
+
+        var options = new BuildOptions
+        {
+            ProjectPath = ".",
+            ExtraArguments = new Dictionary<string, string>
+            {
+                ["list-templates"] = "",
+            },
+        };
+        var result = new CreateProjectCommand().Execute(options);
+        Assert(result.Success, $"--list-templates should succeed: {result.Message}");
+
+        Console.WriteLine("  PASSED");
+    }
+
     // --- Helpers ---
 
     private static BuildResult Execute(string projectName, string location)
@@ -220,6 +326,21 @@ public static class CreateProjectCommandTest
             {
                 ["name"] = projectName,
                 ["location"] = location,
+            },
+        };
+        return new CreateProjectCommand().Execute(options);
+    }
+
+    private static BuildResult ExecuteWithTemplate(string projectName, string location, string template)
+    {
+        var options = new BuildOptions
+        {
+            ProjectPath = ".",
+            ExtraArguments = new Dictionary<string, string>
+            {
+                ["name"] = projectName,
+                ["location"] = location,
+                ["template"] = template,
             },
         };
         return new CreateProjectCommand().Execute(options);
