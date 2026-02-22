@@ -128,10 +128,16 @@ public static class Program
 
                 default:
                     // Capture --key value pairs for command-specific arguments
-                    if (args[i].StartsWith("--") && i + 1 < args.Length)
+                    if (args[i].StartsWith("--") && i + 1 < args.Length && !args[i + 1].StartsWith("--"))
                     {
                         var key = args[i][2..];
                         extraArguments[key] = args[++i];
+                    }
+                    else if (args[i].StartsWith("--"))
+                    {
+                        // Boolean flag (no value following)
+                        var key = args[i][2..];
+                        extraArguments[key] = "";
                     }
                     else
                     {
@@ -225,6 +231,8 @@ public static class Program
             ["remove-plugin-command"] = Tests.RemovePluginCommandTest.Run,
             ["scaffolding-integration"] = Tests.ScaffoldingIntegrationTest.Run,
             ["scaffolding-build-integration"] = Tests.ScaffoldingBuildIntegrationTest.Run,
+            ["project-template-discovery"] = Tests.ProjectTemplateDiscoveryTest.Run,
+            ["project-parser"] = Tests.ProjectParserTest.Run,
         };
 
         try
