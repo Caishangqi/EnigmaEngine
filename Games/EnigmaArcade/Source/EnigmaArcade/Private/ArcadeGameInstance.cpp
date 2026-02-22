@@ -1,6 +1,7 @@
 #include "ArcadeGameInstance.h"
 #include "GenericPlatform/GenericWindowDefinition.h"
 #include "GenericPlatform/GenericApplication.h"
+#include "GenericPlatform/GenericWindow.h"
 #include <nlohmann/json.hpp>
 #include <cstdio>
 #include <iostream>
