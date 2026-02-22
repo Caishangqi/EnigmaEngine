@@ -2,6 +2,7 @@
 
 #include "Windows/WindowsApplication.h"
 #include "GenericPlatform/GenericApplicationMessageHandler.h"
+#include "GenericPlatform/ConsoleWindowSettings.h"
 #include "Misc/AssertionMacros.h"
 
 #include <windowsx.h>
@@ -119,6 +120,20 @@ void FWindowsApplication::PumpMessages(float /*deltaTime*/)
 
         ::TranslateMessage(&msg);
         ::DispatchMessage(&msg);
+    }
+
+    // Pump console input for any console windows.
+    FGenericApplicationMessageHandler* handler = GetMessageHandler();
+    if (handler != nullptr)
+    {
+        for (const auto& window : m_windows)
+        {
+            auto* consoleWindow = dynamic_cast<FConsoleWindow*>(window.get());
+            if (consoleWindow != nullptr)
+            {
+                consoleWindow->pumpConsoleInput(handler);
+            }
+        }
     }
 }
 
@@ -340,6 +355,20 @@ void FWindowsApplication::ProcessMessage(
 
 FGenericWindow* FWindowsApplication::MakeWindow(const FWindowDefinition& definition)
 {
+    if (definition.Type == EWindowType::Console)
+    {
+        FConsoleWindowSettings settings;
+        settings.Columns = static_cast<int16_t>(definition.Width);
+        settings.Rows    = static_cast<int16_t>(definition.Height);
+        settings.bResizable = definition.bIsResizable;
+
+        auto window = std::make_unique<FConsoleWindow>(settings);
+        FGenericWindow* rawPtr = window.get();
+        m_windows.push_back(std::move(window));
+        return rawPtr;
+    }
+
+    // Native window path (unchanged)
     auto window = std::make_unique<FWindowsWindow>();
 
     bool bSuccess = window->Initialize(
@@ -383,9 +412,11 @@ FWindowsWindow* FWindowsApplication::FindWindowByHwnd(HWND hwnd) const
 {
     for (const auto& window : m_windows)
     {
-        if (window->GetNativeHandle() == static_cast<void*>(hwnd))
+        auto* nativeWindow = dynamic_cast<FWindowsWindow*>(window.get());
+        if (nativeWindow != nullptr &&
+            nativeWindow->GetNativeHandle() == static_cast<void*>(hwnd))
         {
-            return window.get();
+            return nativeWindow;
         }
     }
     return nullptr;

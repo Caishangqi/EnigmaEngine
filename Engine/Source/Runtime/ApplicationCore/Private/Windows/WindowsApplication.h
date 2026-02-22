@@ -4,6 +4,7 @@
 
 #include "GenericPlatform/GenericApplication.h"
 #include "Windows/WindowsWindow.h"
+#include "Windows/ConsoleWindow.h"
 
 #include <windows.h>
 
@@ -41,13 +42,14 @@ private:
     void ProcessMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
     /// Find the FWindowsWindow associated with an HWND.
+    /// Returns nullptr if the HWND does not belong to an FWindowsWindow.
     FWindowsWindow* FindWindowByHwnd(HWND hwnd) const;
 
     /// Register the Win32 window class (called once in constructor).
     void RegisterWindowClass();
 
     HINSTANCE m_hInstance = nullptr;
-    std::vector<std::unique_ptr<FWindowsWindow>> m_windows;
+    std::vector<std::unique_ptr<FGenericWindow>> m_windows;
 
     /// Class name for RegisterClassEx.
     static constexpr const char* kWindowClassName = "EnigmaEngineWindow";
