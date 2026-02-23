@@ -22,6 +22,7 @@ void FArcadeGameInstance::Init()
 	windowDef.Width = 120;   // columns
 	windowDef.Height = 40;   // rows
 	windowDef.Type = Enigma::EWindowType::Console;
+	windowDef.bIsResizable = false;
 
 	Enigma::FGenericApplication* app = Enigma::FGenericApplication::GetApplication();
 	if (app != nullptr)

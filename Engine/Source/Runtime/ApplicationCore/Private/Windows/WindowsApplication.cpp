@@ -360,7 +360,9 @@ FGenericWindow* FWindowsApplication::MakeWindow(const FWindowDefinition& definit
         FConsoleWindowSettings settings;
         settings.Columns = static_cast<int16_t>(definition.Width);
         settings.Rows    = static_cast<int16_t>(definition.Height);
-        settings.bResizable = definition.bIsResizable;
+        // Console windows are non-resizable by default (FConsoleWindowSettings::bResizable = false).
+        // FWindowDefinition::bIsResizable defaults to true for native windows, which is not
+        // appropriate for console windows, so we intentionally do not copy it here.
 
         auto window = std::make_unique<FConsoleWindow>(settings);
         FGenericWindow* rawPtr = window.get();
