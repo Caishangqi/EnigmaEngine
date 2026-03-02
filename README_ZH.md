@@ -21,17 +21,18 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 
 - 模块化架构：引擎、游戏逻辑和插件均以独立 DLL 模块运行，支持动态加载和依赖管理
 - 插件系统：通过 `.eplugin` 描述符定义插件，支持加载阶段控制，自动发现和依赖检查
+- INI 配置系统：UE 风格分层配置，4 层合并（引擎基础 → 插件 → 项目默认 → 用户本地），类型化读写、数组操作符、插件双轨支持
 - 项目脚手架：一键创建项目、模块、插件，自动生成模板代码和配置文件
 - 多配置构建：Debug / DebugGame / Development / Shipping / Test 五种构建配置
 - Visual Studio 集成：自动生成 `.sln` 和 `.vcxproj` 项目文件
 - Unreal 风格 API：熟悉的命名约定和架构模式（ModuleRules、TargetRules、GameInstance）
 - 核心数学库：FVector、FMatrix、FQuat、FRotator、FTransform 等完整 3D 数学类型，右手 Y-up 坐标系，constexpr 友好
 - 委托与事件系统：类型安全的 TDelegate、TMulticastDelegate，FDelegateHandle 生命周期管理，支持静态/Lambda/成员函数绑定
+- ASCII 渲染器：基于帧缓冲的 ASCII 字符渲染，Z 深度排序、场景视图摄像机、VT100 终端输出
 
 ## 计划中的特性
 
 - 引入支持模块和插件 DLL 热重载的游戏编辑器
-- 引入基于 ASCII 的 720p 渲染器
 - 将 `create-module`、`create-plugin` 等构建操作集成到游戏编辑器中
 - 通过 Viewport 抽象层将渲染器初始化与窗口创建解耦（类似 UE 的 RHI / GameViewport 分离），以支持多渲染后端（DX12、Vulkan）
 
@@ -99,9 +100,11 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 | **名称** | **说明** | **状态** |
 |----------|:--------:|:--------:|
-| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）和核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform） | stable |
+| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）、INI 配置系统（FConfigCacheIni、GConfig）和核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform） | stable |
 | `Enigma::ApplicationCore` | 平台无关的应用程序和窗口抽象（FGenericApplication、FGenericWindow、FGenericApplicationMessageHandler），含 Win32 实现 | stable |
-| `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine、FGameInstance 游戏实例和模块加载阶段管理 | stable |
+| `Enigma::RenderCore` | 渲染器接口抽象层（IRendererModule），将引擎与具体渲染器实现解耦 | stable |
+| `Enigma::AsciiRenderer` | ASCII 字符渲染器，帧缓冲、Z 深度排序、场景视图摄像机、VT100 终端输出 | stable |
+| `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine 配置驱动窗口创建、FGameInstance 游戏实例和模块加载阶段管理 | stable |
 | `Enigma::Launch` | 入口点模块，提供 GuardedMain 守护主函数和平台特定启动逻辑（main / WinMain） | stable |
 
 ## 第三方库
@@ -116,18 +119,23 @@ BuildTool remove-plugin <project-path> --name MyFeature
 ```
 EnigmaEngine/
   Engine/
-    Source/Runtime/         引擎运行时模块 (Core, Engine, Launch)
+    Config/                 引擎基础配置 (BaseEngine.ini, BaseGame.ini)
+    Source/Runtime/         引擎运行时模块 (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
     Source/ThirdParty/      第三方库 (nlohmann_json, googletest)
+    Source/Programs/        构建工具 (BuildTool)
     Templates/              项目/模块/插件代码模板
-  BuildTool/                C# .NET 构建工具
-  Games/
-    EnigmaArcade/           示例游戏项目
-      Source/               游戏模块源码
-      Plugins/              游戏插件
+  EnigmaArcade/             示例游戏项目
+    Config/                 项目配置 (DefaultEngine.ini, DefaultGame.ini)
+    Source/                 游戏模块源码
+    Plugins/                游戏插件
   Tests/
     Core.Math.Tests/        Core 数学库单元测试 (GoogleTest, 284 个测试)
     Core.Delegates.Tests/   委托系统单元测试 (GoogleTest, 37 个测试)
+    Core.Config.Tests/      配置系统单元测试 (GoogleTest)
     ApplicationCore.Tests/  ApplicationCore 集成测试 (GoogleTest, 20 个测试)
+    RenderCore.Tests/       RenderCore 模块测试 (GoogleTest)
+    AsciiRenderer.Tests/    AsciiRenderer 模块测试 (GoogleTest)
+    Engine.Tests/           Engine 模块测试 (GoogleTest)
 ```
 
 <p>&nbsp;

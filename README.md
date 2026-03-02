@@ -21,17 +21,18 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 
 - Modular architecture: engine, game logic, and plugins run as independent DLL modules with dynamic loading and dependency management
 - Plugin system: plugins defined via `.eplugin` descriptors with loading phase control, auto-discovery, and dependency checking
+- INI config system: UE-style layered config with 4-layer merging (Engine Base → Plugin → Project Default → User), typed getters/setters, array operators, plugin dual-track support
 - Project scaffolding: one-command creation of projects, modules, and plugins with auto-generated template code and configuration
 - Multi-configuration builds: Debug / DebugGame / Development / Shipping / Test
 - Visual Studio integration: auto-generated `.sln` and `.vcxproj` project files
 - Unreal-style API: familiar naming conventions and architectural patterns (ModuleRules, TargetRules, GameInstance)
 - Core math library: FVector, FMatrix, FQuat, FRotator, FTransform and more, right-hand Y-up coordinate system, constexpr-friendly
 - Delegate & event system: type-safe TDelegate, TMulticastDelegate with FDelegateHandle lifecycle management, supports static/lambda/member function bindings
+- ASCII renderer: frame-buffer based ASCII art rendering with Z-depth sorting, scene view camera, and VT100 terminal output
 
 ## Planned Features
 
 - Game Editor with hot-reload support for game module and plugin DLLs
-- ASCII-based 720p renderer
 - Integration of `create-module`, `create-plugin` and other build actions into the Game Editor
 - Decouple renderer initialization from window creation via a Viewport abstraction layer (similar to UE's RHI / GameViewport split), enabling multiple render backends (DX12, Vulkan)
 
@@ -99,9 +100,11 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 | **Name** | **Description** | **Status** |
 |----------|:---------------:|:----------:|
-| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), and core math types (FVector, FMatrix, FQuat, FRotator, FTransform) | stable |
+| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), INI config system (FConfigCacheIni, GConfig), and core math types (FVector, FMatrix, FQuat, FRotator, FTransform) | stable |
 | `Enigma::ApplicationCore` | Platform-agnostic application and window abstraction (FGenericApplication, FGenericWindow, FGenericApplicationMessageHandler) with Win32 implementation | stable |
-| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine, FGameInstance, and module loading phase management | stable |
+| `Enigma::RenderCore` | Renderer interface abstraction layer (IRendererModule) decoupling engine from concrete renderer implementations | stable |
+| `Enigma::AsciiRenderer` | ASCII art renderer with frame-buffer, Z-depth sorting, scene view camera, and VT100 terminal output | stable |
+| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine with config-driven window creation, FGameInstance, and module loading phase management | stable |
 | `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
 
 ## Third Party
@@ -116,18 +119,23 @@ BuildTool remove-plugin <project-path> --name MyFeature
 ```
 EnigmaEngine/
   Engine/
-    Source/Runtime/         Runtime modules (Core, Engine, Launch)
+    Config/                 Engine base config (BaseEngine.ini, BaseGame.ini)
+    Source/Runtime/         Runtime modules (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
     Source/ThirdParty/      Third-party libraries (nlohmann_json, googletest)
+    Source/Programs/        Build tools (BuildTool)
     Templates/              Project / Module / Plugin code templates
-  BuildTool/                C# .NET build tool
-  Games/
-    EnigmaArcade/           Example game project
-      Source/               Game module sources
-      Plugins/              Game plugins
+  EnigmaArcade/             Example game project
+    Config/                 Project config (DefaultEngine.ini, DefaultGame.ini)
+    Source/                 Game module sources
+    Plugins/                Game plugins
   Tests/
     Core.Math.Tests/        Core math unit tests (GoogleTest, 284 tests)
     Core.Delegates.Tests/   Delegate system unit tests (GoogleTest, 37 tests)
+    Core.Config.Tests/      Config system unit tests (GoogleTest)
     ApplicationCore.Tests/  ApplicationCore integration tests (GoogleTest, 20 tests)
+    RenderCore.Tests/       RenderCore module tests (GoogleTest)
+    AsciiRenderer.Tests/    AsciiRenderer module tests (GoogleTest)
+    Engine.Tests/           Engine module tests (GoogleTest)
 ```
 
 <p>&nbsp;
