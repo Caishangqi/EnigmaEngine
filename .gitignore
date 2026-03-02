@@ -55,7 +55,7 @@ Tests/**/*.sln
 Tests/**/*.vcxproj
 Tests/**/*.vcxproj.filters
 Tests/**/*.vcxproj.user
-Tests/**/CMakeLists.txt
+# Tests/**/CMakeLists.txt — removed: test CMakeLists.txt are hand-written source files
 
 # -----------------------------------------------------------------------------
 # IDE / Editor
