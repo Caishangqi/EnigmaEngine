@@ -33,6 +33,7 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - 引入支持模块和插件 DLL 热重载的游戏编辑器
 - 引入基于 ASCII 的 720p 渲染器
 - 将 `create-module`、`create-plugin` 等构建操作集成到游戏编辑器中
+- 通过 Viewport 抽象层将渲染器初始化与窗口创建解耦（类似 UE 的 RHI / GameViewport 分离），以支持多渲染后端（DX12、Vulkan）
 
 ## 构建
 
@@ -69,7 +70,7 @@ BuildTool package <project-path> -o <output-path>
 
 ```bash
 # 创建新游戏项目
-BuildTool create-project --name MyGame --location ./Games
+BuildTool create-project --name MyGame --location .
 
 # 创建游戏模块
 BuildTool create-module <project-path> --name GameUtils

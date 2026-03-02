@@ -12,5 +12,6 @@ public class Engine : ModuleRules
 
         PublicDependencyModuleNames.Add("Core");
         PublicDependencyModuleNames.Add("ApplicationCore");
+        PublicDependencyModuleNames.Add("RenderCore");
     }
 }

@@ -43,12 +43,13 @@ obj/
 # Generated Project Files (by BuildTool generate-project-files)
 # -----------------------------------------------------------------------------
 # Game project .sln and .vcxproj are generated, not source.
-# BuildTool/BuildTool.sln is source and explicitly tracked via git add -f.
-Games/**/*.sln
-Games/**/*.vcxproj
-Games/**/*.vcxproj.filters
-Games/**/*.vcxproj.user
-Games/**/CMakeLists.txt
+# Engine/Source/Programs/BuildTool/BuildTool.sln is source and explicitly tracked via git add -f.
+# Game projects live at root level (e.g. EnigmaArcade/) alongside Engine/.
+EnigmaArcade/**/*.sln
+EnigmaArcade/**/*.vcxproj
+EnigmaArcade/**/*.vcxproj.filters
+EnigmaArcade/**/*.vcxproj.user
+EnigmaArcade/**/CMakeLists.txt
 
 Tests/**/*.sln
 Tests/**/*.vcxproj

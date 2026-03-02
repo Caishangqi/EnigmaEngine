@@ -1,0 +1,6 @@
+; Config/DefaultGame.ini
+; Game settings for PROJECT_NAME
+
+[/Script/EngineSettings.GeneralProjectSettings]
+ProjectDisplayedTitle=PROJECT_NAME
+ProjectVersion=1.0.0

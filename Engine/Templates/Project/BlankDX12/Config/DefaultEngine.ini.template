@@ -1,0 +1,11 @@
+; Config/DefaultEngine.ini
+; Engine settings for PROJECT_NAME
+
+[/Script/Engine.GameEngine]
+GameWindowType=Native
+GameWindowWidth=1280
+GameWindowHeight=720
+MaxFPS=60
+
+[/Script/Engine.RendererSettings]
+DefaultRenderer=DX12Renderer

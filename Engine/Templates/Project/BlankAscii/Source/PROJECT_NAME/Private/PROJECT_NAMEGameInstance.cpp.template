@@ -2,7 +2,15 @@
 #include "PROJECT_NAMEGameInstance.h"
 #include "GenericPlatform/GenericWindowDefinition.h"
 #include "GenericPlatform/GenericApplication.h"
-#include <cstdio>
+#include "GenericPlatform/GenericWindow.h"
+#include "Engine/Engine.h"
+#include "EngineModule.h"
+#include "Modules/ModuleManager.h"
+#include "RenderCore/AsciiRendererInterface.h"
+#include "RenderCore/AsciiCell.h"
+#include "SceneView/SceneView.h"
+#include "Math/Color.h"
+#include <format>
 
 void FPROJECT_NAMEGameInstance::Init()
 {
@@ -25,12 +33,20 @@ void FPROJECT_NAMEGameInstance::Init()
 			m_consoleWindow->Show();
 		}
 	}
+
+	// Initialize the renderer with our console window.
+	Enigma::GetRendererModule().Initialize(m_consoleWindow);
+
+	// Cap frame rate at 30 FPS for the ASCII demo.
+	if (Enigma::GEngine != nullptr)
+	{
+		Enigma::GEngine->SetMaxFPS(30.0f);
+	}
 }
 
 void FPROJECT_NAMEGameInstance::Update(float DeltaTime)
 {
 	Enigma::FGameInstance::Update(DeltaTime);
-
 	m_frameCount++;
 
 	// Add per-frame game logic here.
@@ -43,20 +59,24 @@ void FPROJECT_NAMEGameInstance::Render()
 		return;
 	}
 
-	// Clear the console buffer and reset cursor to (0,0).
-	// ClearBuffer() is available on FConsoleWindow via the
-	// polymorphic pointer returned by MakeWindow().
-	// For direct access to console-specific methods, use:
-	//   auto* console = static_cast<FConsoleWindow*>(m_consoleWindow);
-	//   console->ClearBuffer();
+	auto& renderer = Enigma::FModuleManager::Get()
+		.GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
 
-	// Basic ASCII frame rendering example:
-	std::printf("[PROJECT_NAME] Frame %d\n", m_frameCount);
+	int32_t bufW = renderer.GetFrameBufferWidth();
+	int32_t bufH = renderer.GetFrameBufferHeight();
 
-	// TODO: Replace with your ASCII art rendering logic.
-	// Use std::printf or WriteConsoleOutputA for output.
-	// The console is in render-friendly mode by default
-	// (cursor hidden, Quick Edit disabled).
+	// Draw a border box around the screen.
+	renderer.DrawBox(0, 0, bufW, bufH, 0,
+		Enigma::FColor::White, Enigma::FColor::Black);
+
+	// Draw the project title and frame counter.
+	std::string title = std::format("PROJECT_NAME - Frame {}", m_frameCount);
+	renderer.DrawText(2, 0, 1, title.c_str(),
+		Enigma::FColor::Yellow, Enigma::FColor::Black);
+
+	// TODO: Add your custom ASCII rendering logic here.
+	// Use renderer.DrawCell(), DrawText(), DrawSprite(), FillRect(), DrawBox().
+	// All draw commands use world-space coordinates and are deferred to EndFrame.
 }
 
 void FPROJECT_NAMEGameInstance::Shutdown()

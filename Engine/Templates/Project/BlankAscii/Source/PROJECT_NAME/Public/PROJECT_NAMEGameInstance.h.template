@@ -3,9 +3,12 @@
 
 #include "PROJECT_NAMEAPI.generated.h"
 #include "GameFramework/GameInstance.h"
+#include <cstdint>
+
+namespace Enigma { class FGenericWindow; }
 
 /// PROJECT_NAME game instance.
-/// Creates a console window with render-friendly mode
+/// Creates a console window and uses the renderer API
 /// for ASCII art rendering.
 class PROJECT_NAME_API FPROJECT_NAMEGameInstance : public Enigma::FGameInstance
 {

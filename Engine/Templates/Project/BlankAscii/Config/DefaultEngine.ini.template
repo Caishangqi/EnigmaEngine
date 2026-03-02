@@ -1,0 +1,11 @@
+; Config/DefaultEngine.ini
+; Engine settings for PROJECT_NAME
+
+[/Script/Engine.GameEngine]
+GameWindowType=Console
+GameWindowWidth=120
+GameWindowHeight=40
+MaxFPS=30
+
+[/Script/Engine.RendererSettings]
+DefaultRenderer=AsciiRenderer

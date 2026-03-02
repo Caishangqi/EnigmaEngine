@@ -4,6 +4,7 @@
 
 #include "EngineAPI.generated.h"
 
+#include <chrono>
 #include <cstdint>
 
 namespace Enigma
@@ -42,9 +43,26 @@ public:
     float    GetDeltaTime() const { return DeltaTime; }
     int64_t  GetTickCount() const { return TickCount; }
 
+    // ----- Frame rate control (REQ-5) -----
+
+    /// Set the maximum frames per second. 0 = uncapped.
+    void SetMaxFPS(float fps);
+
+    /// Get the current maximum FPS setting. 0 = uncapped.
+    float GetMaxFPS() const;
+
+    /// Enforce frame rate limit using hybrid sleep + spin-wait.
+    /// Called at the start of each tick by FEngineLoop.
+    void UpdateTimeAndHandleMaxTickRate();
+
 protected:
     float    DeltaTime  = 0.0f;
     int64_t  TickCount  = 0;
+
+private:
+    using Clock = std::chrono::high_resolution_clock;
+    float             m_maxFPS = 0.0f;  // 0 = uncapped
+    Clock::time_point m_lastTickTime{};
 };
 
 // Global engine pointer -- set by FEngineLoop::Init, cleared by Exit.

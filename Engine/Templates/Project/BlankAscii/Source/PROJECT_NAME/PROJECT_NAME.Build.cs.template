@@ -12,6 +12,7 @@ public class PROJECT_NAME : ModuleRules
 		PublicDependencyModuleNames.Add("Core");
 		PublicDependencyModuleNames.Add("Engine");
 		PublicDependencyModuleNames.Add("ApplicationCore");
+		PublicDependencyModuleNames.Add("RenderCore");
 
 		// Private dependencies are only used internally by this module.
 		// PrivateDependencyModuleNames.Add("SomeModule");

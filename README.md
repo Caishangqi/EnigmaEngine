@@ -33,6 +33,7 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - Game Editor with hot-reload support for game module and plugin DLLs
 - ASCII-based 720p renderer
 - Integration of `create-module`, `create-plugin` and other build actions into the Game Editor
+- Decouple renderer initialization from window creation via a Viewport abstraction layer (similar to UE's RHI / GameViewport split), enabling multiple render backends (DX12, Vulkan)
 
 ## Building
 
@@ -69,7 +70,7 @@ BuildTool package <project-path> -o <output-path>
 
 ```bash
 # Create a new game project
-BuildTool create-project --name MyGame --location ./Games
+BuildTool create-project --name MyGame --location .
 
 # Create a game module
 BuildTool create-module <project-path> --name GameUtils

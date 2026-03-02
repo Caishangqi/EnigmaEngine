@@ -5,8 +5,12 @@
 #include "Engine/GameEngine.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "Modules/ModuleManager.h"
+#include "CoreGlobals.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Misc/ConfigDelegates.h"
 
 #include <cstdio>
+#include <filesystem>
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -102,14 +106,73 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
     // Phase 0: EarliestPossible (Core, fundamental modules)
     LoadModulesForPhase(ELoadingPhase::EarliestPossible);
 
-    // Phase 1: PostConfigInit (config-dependent modules)
+    // Create platform application (ApplicationCore)
+    FGenericApplication::CreateApplication();
+
+    // --- GConfig initialization ---
+    // Resolve engine and project config directories from executable location.
+    // Mirrors UE's FPaths approach: fixed relative paths from exe.
+    //
+    // Both Development and Shipped layouts place the exe at:
+    //   {Project}/Binaries/{Platform}/
+    //
+    // Engine config: ../../../Engine/Config  (3 levels up to repo root, then Engine/Config)
+    // Project config: ../../Config           (2 levels up to project root, then Config)
+    std::string engineConfigDir;
+    std::string projectConfigDir;
+    {
+#ifdef _WIN32
+        char exePath[MAX_PATH] = {};
+        if (::GetModuleFileNameA(nullptr, exePath, MAX_PATH) > 0)
+        {
+            std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
+
+            // Engine config: ../../../Engine/Config
+            std::filesystem::path engineCfg = exeDir / ".." / ".." / ".." / "Engine" / "Config";
+            if (std::filesystem::exists(engineCfg))
+            {
+                engineConfigDir = std::filesystem::canonical(engineCfg).string();
+            }
+
+            // Project config: ../../Config
+            std::filesystem::path projCfg = exeDir / ".." / ".." / "Config";
+            if (std::filesystem::exists(projCfg))
+            {
+                projectConfigDir = std::filesystem::canonical(projCfg).string();
+            }
+        }
+#endif
+        // Command-line override: --engine-dir=<path>
+        if (cmdLine != nullptr)
+        {
+            std::string cmdStr(cmdLine);
+            const std::string flag = "--engine-dir=";
+            auto pos = cmdStr.find(flag);
+            if (pos != std::string::npos)
+            {
+                auto start = pos + flag.size();
+                auto end = cmdStr.find(' ', start);
+                std::string dir = cmdStr.substr(start, end - start);
+                std::filesystem::path configPath = std::filesystem::path(dir) / "Config";
+                if (std::filesystem::exists(configPath))
+                {
+                    engineConfigDir = std::filesystem::canonical(configPath).string();
+                }
+            }
+        }
+    }
+
+    GConfig = new FConfigCacheIni();
+    GConfig->Initialize(engineConfigDir, projectConfigDir);
+    FConfigDelegates::OnConfigReadyForUse.Broadcast();
+    std::printf("[FEngineLoop] GConfig initialized (engine: \"%s\", project: \"%s\")\n",
+        engineConfigDir.c_str(), projectConfigDir.c_str());
+
+    // Phase 1: PostConfigInit (config-dependent modules -- can now read GConfig)
     LoadModulesForPhase(ELoadingPhase::PostConfigInit);
 
     // Phase 2: PreLoadingScreen (Engine, Renderer)
     LoadModulesForPhase(ELoadingPhase::PreLoadingScreen);
-
-    // Create platform application (ApplicationCore)
-    FGenericApplication::CreateApplication();
 
     std::printf("[FEngineLoop] PreInit complete\n");
     return 0;
@@ -157,11 +220,12 @@ int32_t FEngineLoop::Init()
         }
     }
 
-    // Phase 4: PostEngineInit (plugins, late modules)
-    LoadModulesForPhase(ELoadingPhase::PostEngineInit);
-
     // Initialize engine (uses registered factories, e.g. CreateGameInstance)
     GEngine->Init(this);
+
+    // Phase 4: PostEngineInit (plugins, late modules)
+    // Loaded AFTER GEngine->Init() so modules can access fully initialized engine.
+    LoadModulesForPhase(ELoadingPhase::PostEngineInit);
 
     // Start engine (initializes GameInstance, begins game loop)
     GEngine->Start();
@@ -181,6 +245,9 @@ int32_t FEngineLoop::Init()
 void FEngineLoop::Tick()
 {
     if (!bIsRunning || !GEngine) return;
+
+    // Frame rate control (REQ-5)
+    GEngine->UpdateTimeAndHandleMaxTickRate();
 
     // Pump OS messages before game tick
     if (auto* app = FGenericApplication::GetApplication())
@@ -226,6 +293,13 @@ void FEngineLoop::Exit()
 
     // Unload all modules in reverse load-order
     FModuleManager::Get().UnloadAllModules();
+
+    // Destroy GConfig last (after module unload, matches UE ordering)
+    if (GConfig)
+    {
+        delete GConfig;
+        GConfig = nullptr;
+    }
 
     std::printf("[FEngineLoop] Exit complete\n");
 }

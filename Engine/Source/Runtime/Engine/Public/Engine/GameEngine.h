@@ -11,6 +11,8 @@
 namespace Enigma
 {
 
+class FGenericWindow;
+
 // ---------------------------------------------------------------
 // FGameEngine -- game-mode engine (REQ-019)
 //
@@ -39,13 +41,22 @@ public:
 
     FGameInstance* GetGameInstance() const override;
 
+    /// Get the game window created during Init. May be nullptr in headless mode.
+    FGenericWindow* GetGameWindow() const { return m_gameWindow; }
+
 protected:
     /// Factory method -- uses registered factory if available,
     /// otherwise falls back to base FGameInstance.
     virtual std::unique_ptr<FGameInstance> CreateGameInstance();
 
+    /// Create the game window using config values from GConfig.
+    /// Reads window title, dimensions, type from INI sections.
+    /// Falls back to defaults (120x40 Console) if GConfig is null.
+    virtual FGenericWindow* CreateGameWindow();
+
 private:
     std::unique_ptr<FGameInstance> GameInstance;
+    FGenericWindow* m_gameWindow = nullptr;
     static GameInstanceFactory s_GameInstanceFactory;
 };
 
