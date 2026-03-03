@@ -88,13 +88,31 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 ### Build Configurations
 
-| Configuration | Description | Link Mode | Optimization |
-|---------------|:-----------:|:---------:|:------------:|
-| `Debug` | Full debug, no optimization | Modular (DLL) | /Od |
-| `DebugGame` | Engine optimized, game debuggable | Modular (DLL) | /O1 |
-| `Development` | Development build, moderate optimization | Modular (DLL) | /O1 |
-| `Shipping` | Release build, full optimization | Monolithic (static) | /O2 |
-| `Test` | Automated test build | Modular (DLL) | /O2 |
+| Configuration | Description | Link Mode | Optimization | EXE Location | Engine DLLs | Game DLLs |
+|---------------|:-----------:|:---------:|:------------:|:------------:|:-----------:|:---------:|
+| `Debug` | Full debug, no optimization | Modular (DLL) | /Od | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+| `DebugGame` | Engine optimized, game debuggable | Modular (DLL) | /O1 | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+| `Development` | Development build, moderate optimization | Modular (DLL) | /O1 | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+| `Shipping` | Release build, full optimization | Monolithic (static) | /O2 | Project/Binaries/ | N/A | N/A |
+| `Test` | Automated test build | Modular (DLL) | /O2 | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+
+### Binary Layout
+
+Modular builds (Debug / DebugGame / Development) follow UE's split layout:
+
+```
+Engine/Binaries/Win64/           EXE + engine module DLLs + .modules manifest
+{Project}/Binaries/Win64/        Game module DLLs + .modules + .target manifest
+{Project}/Plugins/{Name}/Binaries/Win64/   Plugin DLLs + .modules manifest
+```
+
+Shipping builds produce a single monolithic executable:
+
+```
+{Project}/Binaries/Win64/        Monolithic EXE + .target manifest
+```
+
+The EXE locates game DLLs at runtime via `--project-dir=` command line argument (auto-configured in VS debugger settings).
 
 ## Modules
 
@@ -119,15 +137,19 @@ BuildTool remove-plugin <project-path> --name MyFeature
 ```
 EnigmaEngine/
   Engine/
+    Binaries/Win64/         Engine DLLs + EXE (Modular builds)
     Config/                 Engine base config (BaseEngine.ini, BaseGame.ini)
+    Intermediate/           Engine build intermediates + generated .vcxproj files
     Source/Runtime/         Runtime modules (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
     Source/ThirdParty/      Third-party libraries (nlohmann_json, googletest)
     Source/Programs/        Build tools (BuildTool)
     Templates/              Project / Module / Plugin code templates
   EnigmaArcade/             Example game project
+    Binaries/Win64/         Game DLLs (Modular) or monolithic EXE (Shipping)
     Config/                 Project config (DefaultEngine.ini, DefaultGame.ini)
+    Intermediate/           Project build intermediates + generated .vcxproj files
     Source/                 Game module sources
-    Plugins/                Game plugins
+    Plugins/                Game plugins (each with own Binaries/ and Intermediate/)
   Tests/
     Core.Math.Tests/        Core math unit tests (GoogleTest, 284 tests)
     Core.Delegates.Tests/   Delegate system unit tests (GoogleTest, 37 tests)

@@ -88,13 +88,31 @@ BuildTool remove-plugin <project-path> --name MyFeature
 
 ### 构建配置
 
-| 配置 | 说明 | 链接方式 | 优化级别 |
-|------|:----:|:--------:|:--------:|
-| `Debug` | 完整调试，无优化 | 模块化 (DLL) | /Od |
-| `DebugGame` | 引擎优化，游戏可调试 | 模块化 (DLL) | /O1 |
-| `Development` | 开发构建，中等优化 | 模块化 (DLL) | /O1 |
-| `Shipping` | 发布构建，完全优化 | 单体 (静态链接) | /O2 |
-| `Test` | 自动化测试构建 | 模块化 (DLL) | /O2 |
+| 配置 | 说明 | 链接方式 | 优化级别 | EXE 位置 | 引擎 DLL | 游戏 DLL |
+|------|:----:|:--------:|:--------:|:--------:|:--------:|:--------:|
+| `Debug` | 完整调试，无优化 | 模块化 (DLL) | /Od | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+| `DebugGame` | 引擎优化，游戏可调试 | 模块化 (DLL) | /O1 | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+| `Development` | 开发构建，中等优化 | 模块化 (DLL) | /O1 | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+| `Shipping` | 发布构建，完全优化 | 单体 (静态链接) | /O2 | Project/Binaries/ | N/A | N/A |
+| `Test` | 自动化测试构建 | 模块化 (DLL) | /O2 | Engine/Binaries/ | Engine/Binaries/ | Project/Binaries/ |
+
+### 二进制输出布局
+
+模块化构建（Debug / DebugGame / Development）遵循 UE 的分离布局：
+
+```
+Engine/Binaries/Win64/           EXE + 引擎模块 DLL + .modules 清单
+{Project}/Binaries/Win64/        游戏模块 DLL + .modules + .target 清单
+{Project}/Plugins/{Name}/Binaries/Win64/   插件 DLL + .modules 清单
+```
+
+Shipping 构建生成单一的单体可执行文件：
+
+```
+{Project}/Binaries/Win64/        单体 EXE + .target 清单
+```
+
+EXE 通过 `--project-dir=` 命令行参数在运行时定位游戏 DLL（VS 调试器设置中已自动配置）。
 
 ## 模块
 
@@ -119,15 +137,19 @@ BuildTool remove-plugin <project-path> --name MyFeature
 ```
 EnigmaEngine/
   Engine/
+    Binaries/Win64/         引擎 DLL + EXE（模块化构建）
     Config/                 引擎基础配置 (BaseEngine.ini, BaseGame.ini)
+    Intermediate/           引擎构建中间文件 + 生成的 .vcxproj 文件
     Source/Runtime/         引擎运行时模块 (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
     Source/ThirdParty/      第三方库 (nlohmann_json, googletest)
     Source/Programs/        构建工具 (BuildTool)
     Templates/              项目/模块/插件代码模板
   EnigmaArcade/             示例游戏项目
+    Binaries/Win64/         游戏 DLL（模块化）或单体 EXE（Shipping）
     Config/                 项目配置 (DefaultEngine.ini, DefaultGame.ini)
+    Intermediate/           项目构建中间文件 + 生成的 .vcxproj 文件
     Source/                 游戏模块源码
-    Plugins/                游戏插件
+    Plugins/                游戏插件（各自拥有独立的 Binaries/ 和 Intermediate/）
   Tests/
     Core.Math.Tests/        Core 数学库单元测试 (GoogleTest, 284 个测试)
     Core.Delegates.Tests/   委托系统单元测试 (GoogleTest, 37 个测试)
