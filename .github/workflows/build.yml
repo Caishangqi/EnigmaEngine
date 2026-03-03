@@ -107,18 +107,46 @@ jobs:
       - name: Verify build output
         shell: pwsh
         run: |
-          $binDir = "EnigmaArcade/Binaries/Win64"
-          if (-not (Test-Path $binDir)) {
-            Write-Host "Binaries directory not found: $binDir" -ForegroundColor Red
-            exit 1
+          $config = "${{ matrix.config }}"
+          $isModular = $config -ne "Shipping"
+
+          if ($isModular) {
+            # Modular: EXE + engine DLLs in Engine/Binaries/Win64, game DLLs in Project/Binaries/Win64
+            $engineBinDir = "Engine/Binaries/Win64"
+            $gameBinDir = "EnigmaArcade/Binaries/Win64"
+
+            if (-not (Test-Path $engineBinDir)) {
+              Write-Host "Engine binaries directory not found: $engineBinDir" -ForegroundColor Red
+              exit 1
+            }
+            $exes = Get-ChildItem -Path $engineBinDir -Filter "*.exe" -ErrorAction SilentlyContinue
+            if ($exes.Count -eq 0) {
+              Write-Host "No executables found in $engineBinDir" -ForegroundColor Red
+              exit 1
+            }
+            $engineDlls = Get-ChildItem -Path $engineBinDir -Filter "*.dll" -ErrorAction SilentlyContinue
+            Write-Host "Engine binaries:" -ForegroundColor Green
+            Get-ChildItem -Path $engineBinDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+            if (Test-Path $gameBinDir) {
+              Write-Host "Game binaries:" -ForegroundColor Green
+              Get-ChildItem -Path $gameBinDir | ForEach-Object { Write-Host "  $($_.Name)" }
+            }
+          } else {
+            # Shipping: monolithic EXE in Project/Binaries/Win64
+            $binDir = "EnigmaArcade/Binaries/Win64"
+            if (-not (Test-Path $binDir)) {
+              Write-Host "Binaries directory not found: $binDir" -ForegroundColor Red
+              exit 1
+            }
+            $exes = Get-ChildItem -Path $binDir -Filter "*.exe" -ErrorAction SilentlyContinue
+            if ($exes.Count -eq 0) {
+              Write-Host "No executables found in $binDir" -ForegroundColor Red
+              exit 1
+            }
+            Write-Host "Build output:" -ForegroundColor Green
+            Get-ChildItem -Path $binDir | ForEach-Object { Write-Host "  $($_.Name)" }
           }
-          $exes = Get-ChildItem -Path $binDir -Filter "*.exe" -ErrorAction SilentlyContinue
-          if ($exes.Count -eq 0) {
-            Write-Host "No executables found in $binDir" -ForegroundColor Red
-            exit 1
-          }
-          Write-Host "Build output:" -ForegroundColor Green
-          Get-ChildItem -Path $binDir | ForEach-Object { Write-Host "  $($_.Name)" }
 
   # ---------------------------------------------------------------------------
   # Stage 3: Full scaffolding + build integration test
@@ -228,7 +256,7 @@ jobs:
         run: ctest --test-dir build-ascii-renderer --output-on-failure -C Release --progress
 
   # ---------------------------------------------------------------------------
-  # Stage 5: Engine Module Build Validation (legacy standalone tests)
+  # Stage 5: Engine Module Build Validation (standalone infrastructure tests)
   # ---------------------------------------------------------------------------
   engine-module-validation:
     name: Engine Module Validation
@@ -239,112 +267,52 @@ jobs:
         with:
           submodules: true
 
-      # -- CoreModuleTest --
-      - name: "CoreModuleTest: Configure"
-        run: cmake -B build-core-module -S Tests/CoreModuleTest
-
-      - name: "CoreModuleTest: Build"
-        run: cmake --build build-core-module --config Release
-
-      - name: "CoreModuleTest: Test"
-        run: ctest --test-dir build-core-module --output-on-failure -C Release
-
-      # -- DllExportMacroTest --
-      - name: "DllExportMacroTest: Configure"
+      # -- Core.DllExportMacro --
+      - name: "Core.DllExportMacro: Configure"
         run: cmake -B build-dll-export-macro -S Tests/DllExportMacroTest
 
-      - name: "DllExportMacroTest: Build"
+      - name: "Core.DllExportMacro: Build"
         run: cmake --build build-dll-export-macro --config Release
 
-      - name: "DllExportMacroTest: Test"
+      - name: "Core.DllExportMacro: Test"
         run: ctest --test-dir build-dll-export-macro --output-on-failure -C Release
 
-      # -- EngineLoopTest --
-      - name: "EngineLoopTest: Configure"
-        run: cmake -B build-engine-loop -S Tests/EngineLoopTest
-
-      - name: "EngineLoopTest: Build"
-        run: cmake --build build-engine-loop --config Release
-
-      - name: "EngineLoopTest: Test"
-        run: ctest --test-dir build-engine-loop --output-on-failure -C Release
-
-      # -- EngineModuleTest --
-      - name: "EngineModuleTest: Configure"
-        run: cmake -B build-engine-module -S Tests/EngineModuleTest
-
-      - name: "EngineModuleTest: Build"
-        run: cmake --build build-engine-module --config Release
-
-      - name: "EngineModuleTest: Test"
-        run: ctest --test-dir build-engine-module --output-on-failure -C Release
-
-      # -- GameEngineConnectionTest --
-      - name: "GameEngineConnectionTest: Configure"
-        run: cmake -B build-game-engine-connection -S Tests/GameEngineConnectionTest
-
-      - name: "GameEngineConnectionTest: Build"
-        run: cmake --build build-game-engine-connection --config Release
-
-      - name: "GameEngineConnectionTest: Test"
-        run: ctest --test-dir build-game-engine-connection --output-on-failure -C Release
-
-      # -- GameEngineTest --
-      - name: "GameEngineTest: Configure"
-        run: cmake -B build-game-engine -S Tests/GameEngineTest
-
-      - name: "GameEngineTest: Build"
-        run: cmake --build build-game-engine --config Release
-
-      - name: "GameEngineTest: Test"
-        run: ctest --test-dir build-game-engine --output-on-failure -C Release
-
-      # -- GameInstanceTest --
-      - name: "GameInstanceTest: Configure"
-        run: cmake -B build-game-instance -S Tests/GameInstanceTest
-
-      - name: "GameInstanceTest: Build"
-        run: cmake --build build-game-instance --config Release
-
-      - name: "GameInstanceTest: Test"
-        run: ctest --test-dir build-game-instance --output-on-failure -C Release
-
-      # -- LaunchModuleTest --
-      - name: "LaunchModuleTest: Configure"
-        run: cmake -B build-launch-module -S Tests/LaunchModuleTest
-
-      - name: "LaunchModuleTest: Build"
-        run: cmake --build build-launch-module --config Release
-
-      - name: "LaunchModuleTest: Test"
-        run: ctest --test-dir build-launch-module --output-on-failure -C Release
-
-      # -- ModuleInterfaceTest --
-      - name: "ModuleInterfaceTest: Configure"
+      # -- Core.ModuleInterface --
+      - name: "Core.ModuleInterface: Configure"
         run: cmake -B build-module-interface -S Tests/ModuleInterfaceTest
 
-      - name: "ModuleInterfaceTest: Build"
+      - name: "Core.ModuleInterface: Build"
         run: cmake --build build-module-interface --config Release
 
-      - name: "ModuleInterfaceTest: Test"
+      - name: "Core.ModuleInterface: Test"
         run: ctest --test-dir build-module-interface --output-on-failure -C Release
 
-      # -- ModuleManagerTest --
-      - name: "ModuleManagerTest: Configure"
+      # -- Core.ModuleManager --
+      - name: "Core.ModuleManager: Configure"
         run: cmake -B build-module-manager -S Tests/ModuleManagerTest
 
-      - name: "ModuleManagerTest: Build"
+      - name: "Core.ModuleManager: Build"
         run: cmake --build build-module-manager --config Release
 
-      - name: "ModuleManagerTest: Test"
+      - name: "Core.ModuleManager: Test"
         run: ctest --test-dir build-module-manager --output-on-failure -C Release
 
-      # -- NlohmannJsonTest --
-      - name: "NlohmannJsonTest: Configure"
+      # -- Launch.GuardedMain --
+      - name: "Launch.GuardedMain: Configure"
+        run: cmake -B build-launch-module -S Tests/LaunchModuleTest
+
+      - name: "Launch.GuardedMain: Build"
+        run: cmake --build build-launch-module --config Release
+
+      - name: "Launch.GuardedMain: Test"
+        run: ctest --test-dir build-launch-module --output-on-failure -C Release
+
+      # -- ThirdParty.NlohmannJson --
+      - name: "ThirdParty.NlohmannJson: Configure"
         run: cmake -B build-nlohmann-json -S Tests/NlohmannJsonTest
 
-      - name: "NlohmannJsonTest: Build"
+      - name: "ThirdParty.NlohmannJson: Build"
         run: cmake --build build-nlohmann-json --config Release
 
-      - name: "NlohmannJsonTest: Test"
+      - name: "ThirdParty.NlohmannJson: Test"
         run: ctest --test-dir build-nlohmann-json --output-on-failure -C Release
