@@ -643,6 +643,8 @@ public sealed class VcxprojGenerator
     /// <summary>
     /// Generate .vcxproj.user file with debugger configuration.
     /// Sets DebuggerFlavor=WindowsLocalDebugger so VS can launch/debug the project.
+    /// For executable modules in Modular builds, adds --project-dir= argument
+    /// so the engine can locate game DLLs and project config.
     /// </summary>
     private static string GenerateUserFile(ModuleProjectInput input)
     {
@@ -651,11 +653,24 @@ public sealed class VcxprojGenerator
         sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
         sb.AppendLine($"<Project ToolsVersion=\"17.0\" xmlns=\"{MsBuildNamespace}\">");
 
-        foreach (var (solutionConfig, _, _, _) in Configurations)
+        foreach (var (solutionConfig, buildConfig, _, _) in Configurations)
         {
             sb.AppendLine($"  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='{solutionConfig}'\">");
             sb.AppendLine("    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>");
+
+            if (input.IsExecutable)
+            {
+                sb.AppendLine("    <LocalDebuggerCommand>$(NMakeOutput)</LocalDebuggerCommand>");
+            }
+
             sb.AppendLine("    <LocalDebuggerWorkingDirectory>$(SolutionDir)</LocalDebuggerWorkingDirectory>");
+
+            // Executable modules in Modular configs need --project-dir= to locate game DLLs/config
+            if (input.IsExecutable && buildConfig is "DebugGame" or "Development")
+            {
+                sb.AppendLine("    <LocalDebuggerCommandArguments>--project-dir=$(SolutionDir)</LocalDebuggerCommandArguments>");
+            }
+
             sb.AppendLine("  </PropertyGroup>");
         }
 

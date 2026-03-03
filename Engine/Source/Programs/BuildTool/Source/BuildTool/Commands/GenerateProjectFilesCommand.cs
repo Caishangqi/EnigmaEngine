@@ -49,7 +49,8 @@ public sealed class GenerateProjectFilesCommand : ICommand
 
             // 10. Generate .vcxproj files for each module
             Console.WriteLine("[GenerateProjectFiles] Generating .vcxproj files...");
-            string intermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
+            string engineIntermediateDir = Path.Combine(engineRoot, "Intermediate", "ProjectFiles");
+            string gameIntermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
             string buildToolCsproj = Path.GetFullPath(
                 Path.Combine(engineRoot, "Source", "Programs", "BuildTool", "Source", "BuildTool", "BuildTool.csproj"));
 
@@ -77,12 +78,37 @@ public sealed class GenerateProjectFilesCommand : ICommand
             // Collect .Target.cs files and assign to modules
             var targetCsMap = CollectTargetCsFiles(engineRoot, projectRoot, compilableModules);
 
+            // Build set of engine-side module names for vcxproj directory routing
+            // Includes engine runtime modules and compilable third-party modules
+            var engineModuleNameSet = new HashSet<string>(engineModules.Keys, StringComparer.Ordinal);
+            foreach (var name in thirdPartyModules.Keys)
+                engineModuleNameSet.Add(name);
+
+            // Build moduleName → pluginName mapping for plugin vcxproj routing
+            var pluginModuleToPlugin = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var (pluginName, descriptor) in pluginScanResult.EnabledPlugins)
+            {
+                foreach (var moduleDesc in descriptor.Modules)
+                    pluginModuleToPlugin[moduleDesc.Name] = pluginName;
+            }
+
             foreach (var (moduleName, rules) in compilableModules)
             {
                 var includePaths = ComputeIncludePaths(moduleName, rules, allModules, resolveResult, projectRoot);
                 var preprocessorDefs = ComputePreprocessorDefs(moduleName);
                 var sourceFiles = CollectSourceFiles(rules.ModuleDirectory);
                 string? buildCsPath = Directory.GetFiles(rules.ModuleDirectory, "*.Build.cs").FirstOrDefault();
+
+                // Engine modules and third-party → Engine/Intermediate/ProjectFiles/
+                // Plugin modules → {ProjectRoot}/Plugins/{PluginName}/Intermediate/ProjectFiles/
+                // Game modules → {ProjectRoot}/Intermediate/ProjectFiles/
+                string outputDir;
+                if (engineModuleNameSet.Contains(moduleName))
+                    outputDir = engineIntermediateDir;
+                else if (pluginModuleToPlugin.TryGetValue(moduleName, out var pluginName))
+                    outputDir = Path.Combine(projectRoot, "Plugins", pluginName, "Intermediate", "ProjectFiles");
+                else
+                    outputDir = gameIntermediateDir;
 
                 var vcxResult = vcxprojGen.Generate(new VcxprojGenerator.ModuleProjectInput
                 {
@@ -92,7 +118,7 @@ public sealed class GenerateProjectFilesCommand : ICommand
                     PreprocessorDefinitions = preprocessorDefs,
                     SourceFiles = sourceFiles,
                     ModuleSourceRoot = rules.ModuleDirectory,
-                    OutputDirectory = intermediateDir,
+                    OutputDirectory = outputDir,
                     BuildToolCsprojPath = buildToolCsproj,
                     ProjectFilePath = Path.GetFullPath(eprojectPath),
                     IsExecutable = executableModules.Contains(moduleName),
@@ -123,7 +149,7 @@ public sealed class GenerateProjectFilesCommand : ICommand
                 {
                     ModuleName = moduleName,
                     ModuleDirectory = rules.ModuleDirectory,
-                    OutputDirectory = intermediateDir,
+                    OutputDirectory = engineIntermediateDir,
                     HeaderFiles = headerFiles,
                     BuildCsPath = buildCsPath,
                 });
@@ -152,6 +178,7 @@ public sealed class GenerateProjectFilesCommand : ICommand
                 GameTarget = gameTarget,
                 EngineTarget = engineTarget,
                 BuildToolCsprojPath = File.Exists(buildToolCsproj) ? buildToolCsproj : null,
+                PluginScanResult = pluginScanResult,
             });
 
             if (!slnResult.Success)

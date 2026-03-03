@@ -3,8 +3,10 @@
 namespace BuildTool.Generators;
 
 using System.Text;
+using System.Linq;
 using BuildTool.Analysis;
 using BuildTool.Models;
+using BuildTool.Scanners;
 using BuildTool.Utils;
 
 /// <summary>
@@ -43,6 +45,8 @@ public sealed class SolutionGenerator
         public required TargetRules GameTarget { get; init; }
         public TargetRules? EngineTarget { get; init; }
         public string? BuildToolCsprojPath { get; init; }
+        /// <summary>Plugin scan result for resolving module → plugin name mapping.</summary>
+        public PluginScanner.ScanResult? PluginScanResult { get; init; }
     }
 
     public sealed class GenerateResult
@@ -117,11 +121,19 @@ public sealed class SolutionGenerator
             }
 
             // --- Engine module projects ---
-            string intermediateDir = Path.Combine(input.ProjectRootPath, "Intermediate", "ProjectFiles");
-            foreach (var (moduleName, _) in input.EngineModules)
+            // Engine vcxproj are in Engine/Intermediate/ProjectFiles/, compute relative path from SLN location
+            string engineIntermediateAbs = Path.Combine(input.EngineRootPath, "Intermediate", "ProjectFiles");
+            string engineIntermediateRel = Path.GetRelativePath(input.ProjectRootPath, engineIntermediateAbs)
+                .Replace('/', '\\');
+
+            // Write Launch (executable) first so VS picks it as the default startup project.
+            var engineModulesSorted = input.EngineModules
+                .OrderByDescending(kv => kv.Key == "Launch")
+                .ToList();
+            foreach (var (moduleName, _) in engineModulesSorted)
             {
                 string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
-                string vcxprojRelative = $"Intermediate\\ProjectFiles\\{moduleName}.vcxproj";
+                string vcxprojRelative = $"{engineIntermediateRel}\\{moduleName}.vcxproj";
                 var deps = GetProjectDependencies(moduleName, input.ResolveResult, knownProjectNames);
 
                 WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, vcxprojRelative, projGuid, deps);
@@ -142,10 +154,31 @@ public sealed class SolutionGenerator
             }
 
             // --- Plugin module projects ---
+            // Build moduleName → pluginName mapping for path routing
+            var pluginModuleToPlugin = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (input.PluginScanResult is not null)
+            {
+                foreach (var (pluginName, descriptor) in input.PluginScanResult.EnabledPlugins)
+                {
+                    foreach (var moduleDesc in descriptor.Modules)
+                        pluginModuleToPlugin[moduleDesc.Name] = pluginName;
+                }
+            }
             foreach (var (moduleName, _) in input.PluginModules)
             {
                 string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
-                string vcxprojRelative = $"Intermediate\\ProjectFiles\\{moduleName}.vcxproj";
+                string vcxprojRelative;
+                if (pluginModuleToPlugin.TryGetValue(moduleName, out var ownerPlugin))
+                {
+                    string pluginIntermediateAbs = Path.Combine(
+                        input.ProjectRootPath, "Plugins", ownerPlugin, "Intermediate", "ProjectFiles");
+                    vcxprojRelative = Path.GetRelativePath(input.ProjectRootPath, pluginIntermediateAbs)
+                        .Replace('/', '\\') + $"\\{moduleName}.vcxproj";
+                }
+                else
+                {
+                    vcxprojRelative = $"Intermediate\\ProjectFiles\\{moduleName}.vcxproj";
+                }
                 var deps = GetProjectDependencies(moduleName, input.ResolveResult, knownProjectNames);
 
                 WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, vcxprojRelative, projGuid, deps);
@@ -157,7 +190,7 @@ public sealed class SolutionGenerator
             foreach (var (moduleName, _) in input.ThirdPartyModules)
             {
                 string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
-                string vcxprojRelative = $"Intermediate\\ProjectFiles\\{moduleName}.vcxproj";
+                string vcxprojRelative = $"{engineIntermediateRel}\\{moduleName}.vcxproj";
 
                 WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, vcxprojRelative, projGuid, null);
                 nesting.Add((projGuid, thirdPartyFolderGuid));

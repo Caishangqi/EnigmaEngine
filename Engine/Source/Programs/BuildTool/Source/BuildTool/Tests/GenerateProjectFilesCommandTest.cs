@@ -50,15 +50,35 @@ public static class GenerateProjectFilesCommandTest
         Assert(File.Exists(slnPath), $".sln not found: {slnPath}");
 
         // Verify .vcxproj files exist for known modules
-        string intermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
-        foreach (var module in new[] { "Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature" })
+        // Engine modules → Engine/Intermediate/ProjectFiles/
+        string engineRoot = Path.GetFullPath(Path.Combine(projectRoot, "..", "Engine"));
+        string engineIntermediateDir = Path.Combine(engineRoot, "Intermediate", "ProjectFiles");
+        foreach (var module in new[] { "Core", "Engine", "Launch" })
         {
-            string vcxproj = Path.Combine(intermediateDir, $"{module}.vcxproj");
+            string vcxproj = Path.Combine(engineIntermediateDir, $"{module}.vcxproj");
             Assert(File.Exists(vcxproj), $".vcxproj not found: {vcxproj}");
 
-            string filters = Path.Combine(intermediateDir, $"{module}.vcxproj.filters");
+            string filters = Path.Combine(engineIntermediateDir, $"{module}.vcxproj.filters");
             Assert(File.Exists(filters), $".vcxproj.filters not found: {filters}");
         }
+
+        // Game modules → Project/Intermediate/ProjectFiles/
+        string gameIntermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
+        foreach (var module in new[] { "EnigmaArcade", "ArcadeGameplay" })
+        {
+            string vcxproj = Path.Combine(gameIntermediateDir, $"{module}.vcxproj");
+            Assert(File.Exists(vcxproj), $".vcxproj not found: {vcxproj}");
+
+            string filters = Path.Combine(gameIntermediateDir, $"{module}.vcxproj.filters");
+            Assert(File.Exists(filters), $".vcxproj.filters not found: {filters}");
+        }
+
+        // Plugin modules → Plugins/{PluginName}/Intermediate/ProjectFiles/
+        string arcadeFeatureDir = Path.Combine(projectRoot, "Plugins", "ArcadeFeature", "Intermediate", "ProjectFiles");
+        string afVcxproj = Path.Combine(arcadeFeatureDir, "ArcadeFeature.vcxproj");
+        Assert(File.Exists(afVcxproj), $".vcxproj not found: {afVcxproj}");
+        string afFilters = Path.Combine(arcadeFeatureDir, "ArcadeFeature.vcxproj.filters");
+        Assert(File.Exists(afFilters), $".vcxproj.filters not found: {afFilters}");
 
         Console.WriteLine("  PASSED");
     }
@@ -79,8 +99,9 @@ public static class GenerateProjectFilesCommandTest
         string slnPath = Path.Combine(projectRoot, "EnigmaArcade.sln");
         var slnTimeBefore = File.GetLastWriteTimeUtc(slnPath);
 
-        string intermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
-        string coreVcxproj = Path.Combine(intermediateDir, "Core.vcxproj");
+        string engineRoot = Path.GetFullPath(Path.Combine(projectRoot, "..", "Engine"));
+        string engineIntermediateDir = Path.Combine(engineRoot, "Intermediate", "ProjectFiles");
+        string coreVcxproj = Path.Combine(engineIntermediateDir, "Core.vcxproj");
         var coreTimeBefore = File.GetLastWriteTimeUtc(coreVcxproj);
 
         // Small delay to ensure filesystem timestamp granularity
@@ -196,8 +217,9 @@ public static class GenerateProjectFilesCommandTest
     {
         Console.WriteLine("[Test 6] ThirdParty .vcxproj: exists with ConfigurationType=Utility");
         var projectRoot = ResolveEnigmaArcadeRoot();
-        string intermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
-        string vcxprojPath = Path.Combine(intermediateDir, "nlohmann_json.vcxproj");
+        string engineRoot = Path.GetFullPath(Path.Combine(projectRoot, "..", "Engine"));
+        string engineIntermediateDir = Path.Combine(engineRoot, "Intermediate", "ProjectFiles");
+        string vcxprojPath = Path.Combine(engineIntermediateDir, "nlohmann_json.vcxproj");
         Assert(File.Exists(vcxprojPath), $"nlohmann_json.vcxproj not found: {vcxprojPath}");
 
         XNamespace ns = "http://schemas.microsoft.com/developer/msbuild/2003";
@@ -222,7 +244,8 @@ public static class GenerateProjectFilesCommandTest
     {
         Console.WriteLine("[Test 7] ThirdParty .vcxproj: json.hpp listed as ClInclude");
         var projectRoot = ResolveEnigmaArcadeRoot();
-        string vcxprojPath = Path.Combine(projectRoot, "Intermediate", "ProjectFiles", "nlohmann_json.vcxproj");
+        string engineRoot = Path.GetFullPath(Path.Combine(projectRoot, "..", "Engine"));
+        string vcxprojPath = Path.Combine(engineRoot, "Intermediate", "ProjectFiles", "nlohmann_json.vcxproj");
         Assert(File.Exists(vcxprojPath), $"nlohmann_json.vcxproj not found: {vcxprojPath}");
 
         XNamespace ns = "http://schemas.microsoft.com/developer/msbuild/2003";
@@ -240,7 +263,8 @@ public static class GenerateProjectFilesCommandTest
     {
         Console.WriteLine("[Test 8] ThirdParty .vcxproj: Build.cs listed as None item");
         var projectRoot = ResolveEnigmaArcadeRoot();
-        string vcxprojPath = Path.Combine(projectRoot, "Intermediate", "ProjectFiles", "nlohmann_json.vcxproj");
+        string engineRoot = Path.GetFullPath(Path.Combine(projectRoot, "..", "Engine"));
+        string vcxprojPath = Path.Combine(engineRoot, "Intermediate", "ProjectFiles", "nlohmann_json.vcxproj");
         Assert(File.Exists(vcxprojPath), $"nlohmann_json.vcxproj not found: {vcxprojPath}");
 
         XNamespace ns = "http://schemas.microsoft.com/developer/msbuild/2003";
@@ -258,14 +282,28 @@ public static class GenerateProjectFilesCommandTest
     {
         Console.WriteLine("[Test 9] Module .vcxproj: each compilable module contains its .Build.cs as None item");
         var projectRoot = ResolveEnigmaArcadeRoot();
-        string intermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
+        string engineRoot = Path.GetFullPath(Path.Combine(projectRoot, "..", "Engine"));
+        string engineIntermediateDir = Path.Combine(engineRoot, "Intermediate", "ProjectFiles");
+        string gameIntermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
 
         XNamespace ns = "http://schemas.microsoft.com/developer/msbuild/2003";
 
-        // Check several compilable modules that should have .Build.cs
-        foreach (var module in new[] { "Core", "Engine", "EnigmaArcade" })
+        // Check engine modules
+        foreach (var module in new[] { "Core", "Engine" })
         {
-            string vcxprojPath = Path.Combine(intermediateDir, $"{module}.vcxproj");
+            string vcxprojPath = Path.Combine(engineIntermediateDir, $"{module}.vcxproj");
+            Assert(File.Exists(vcxprojPath), $"{module}.vcxproj not found: {vcxprojPath}");
+
+            var doc = XDocument.Load(vcxprojPath);
+            var noneItems = doc.Descendants(ns + "None").ToList();
+            Assert(noneItems.Any(i => (i.Attribute("Include")?.Value ?? "").Contains(".Build.cs")),
+                $"{module}.vcxproj should contain a .Build.cs as None item");
+        }
+
+        // Check game modules
+        foreach (var module in new[] { "EnigmaArcade" })
+        {
+            string vcxprojPath = Path.Combine(gameIntermediateDir, $"{module}.vcxproj");
             Assert(File.Exists(vcxprojPath), $"{module}.vcxproj not found: {vcxprojPath}");
 
             var doc = XDocument.Load(vcxprojPath);
@@ -281,20 +319,22 @@ public static class GenerateProjectFilesCommandTest
     {
         Console.WriteLine("[Test 10] Target.cs in module vcxproj: EnigmaArcade.Target.cs in EnigmaArcade, EnigmaGame.Target.cs in Launch");
         var projectRoot = ResolveEnigmaArcadeRoot();
-        string intermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
+        string engineRoot = Path.GetFullPath(Path.Combine(projectRoot, "..", "Engine"));
+        string engineIntermediateDir = Path.Combine(engineRoot, "Intermediate", "ProjectFiles");
+        string gameIntermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
 
         XNamespace ns = "http://schemas.microsoft.com/developer/msbuild/2003";
 
-        // EnigmaArcade.Target.cs should be in EnigmaArcade.vcxproj
-        string arcadeVcxproj = Path.Combine(intermediateDir, "EnigmaArcade.vcxproj");
+        // EnigmaArcade.Target.cs should be in EnigmaArcade.vcxproj (game side)
+        string arcadeVcxproj = Path.Combine(gameIntermediateDir, "EnigmaArcade.vcxproj");
         Assert(File.Exists(arcadeVcxproj), $"EnigmaArcade.vcxproj not found");
         var arcadeDoc = XDocument.Load(arcadeVcxproj);
         var arcadeNone = arcadeDoc.Descendants(ns + "None").ToList();
         Assert(arcadeNone.Any(i => (i.Attribute("Include")?.Value ?? "").Contains("EnigmaArcade.Target.cs")),
             "EnigmaArcade.vcxproj should contain EnigmaArcade.Target.cs as None item");
 
-        // EnigmaGame.Target.cs should be in Launch.vcxproj
-        string launchVcxproj = Path.Combine(intermediateDir, "Launch.vcxproj");
+        // EnigmaGame.Target.cs should be in Launch.vcxproj (engine side)
+        string launchVcxproj = Path.Combine(engineIntermediateDir, "Launch.vcxproj");
         Assert(File.Exists(launchVcxproj), $"Launch.vcxproj not found");
         var launchDoc = XDocument.Load(launchVcxproj);
         var launchNone = launchDoc.Descendants(ns + "None").ToList();
