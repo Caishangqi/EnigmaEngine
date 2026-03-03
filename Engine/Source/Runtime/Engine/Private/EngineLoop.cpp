@@ -113,11 +113,15 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
     // Resolve engine and project config directories from executable location.
     // Mirrors UE's FPaths approach: fixed relative paths from exe.
     //
-    // Both Development and Shipped layouts place the exe at:
-    //   {Project}/Binaries/{Platform}/
+    // Modular (Development/DebugGame/Debug):
+    //   EXE at {Engine}/Binaries/{Platform}/
+    //   Engine config: ../../Config
+    //   Project config: resolved via --project-dir= or ../../../{ProjectName}/Config
     //
-    // Engine config: ../../../Engine/Config  (3 levels up to repo root, then Engine/Config)
-    // Project config: ../../Config           (2 levels up to project root, then Config)
+    // Shipped (Shipping):
+    //   EXE at {Project}/Binaries/{Platform}/
+    //   Engine config: ../../../Engine/Config
+    //   Project config: ../../Config
     std::string engineConfigDir;
     std::string projectConfigDir;
     {
@@ -127,18 +131,30 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
         {
             std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
 
-            // Engine config: ../../../Engine/Config
-            std::filesystem::path engineCfg = exeDir / ".." / ".." / ".." / "Engine" / "Config";
-            if (std::filesystem::exists(engineCfg))
+            // Try Modular layout first: EXE in {Engine}/Binaries/{Platform}/
+            // Engine config: ../../Config
+            std::filesystem::path engineCfgModular = exeDir / ".." / ".." / "Config";
+            if (std::filesystem::exists(engineCfgModular))
             {
-                engineConfigDir = std::filesystem::canonical(engineCfg).string();
+                engineConfigDir = std::filesystem::canonical(engineCfgModular).string();
             }
 
-            // Project config: ../../Config
-            std::filesystem::path projCfg = exeDir / ".." / ".." / "Config";
-            if (std::filesystem::exists(projCfg))
+            // Fallback: Shipped layout: EXE in {Project}/Binaries/{Platform}/
+            // Engine config: ../../../Engine/Config
+            if (engineConfigDir.empty())
             {
-                projectConfigDir = std::filesystem::canonical(projCfg).string();
+                std::filesystem::path engineCfgShipped = exeDir / ".." / ".." / ".." / "Engine" / "Config";
+                if (std::filesystem::exists(engineCfgShipped))
+                {
+                    engineConfigDir = std::filesystem::canonical(engineCfgShipped).string();
+                }
+            }
+
+            // Project config: try Shipped layout first (../../Config)
+            std::filesystem::path projCfgShipped = exeDir / ".." / ".." / "Config";
+            if (std::filesystem::exists(projCfgShipped))
+            {
+                projectConfigDir = std::filesystem::canonical(projCfgShipped).string();
             }
         }
 #endif
@@ -146,11 +162,11 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
         if (cmdLine != nullptr)
         {
             std::string cmdStr(cmdLine);
-            const std::string flag = "--engine-dir=";
-            auto pos = cmdStr.find(flag);
+            const std::string engineFlag = "--engine-dir=";
+            auto pos = cmdStr.find(engineFlag);
             if (pos != std::string::npos)
             {
-                auto start = pos + flag.size();
+                auto start = pos + engineFlag.size();
                 auto end = cmdStr.find(' ', start);
                 std::string dir = cmdStr.substr(start, end - start);
                 std::filesystem::path configPath = std::filesystem::path(dir) / "Config";
@@ -158,6 +174,32 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
                 {
                     engineConfigDir = std::filesystem::canonical(configPath).string();
                 }
+            }
+
+            // Command-line override: --project-dir=<path>
+            const std::string projectFlag = "--project-dir=";
+            pos = cmdStr.find(projectFlag);
+            if (pos != std::string::npos)
+            {
+                auto start = pos + projectFlag.size();
+                auto end = cmdStr.find(' ', start);
+                std::string dir = cmdStr.substr(start, end - start);
+                std::filesystem::path configPath = std::filesystem::path(dir) / "Config";
+                if (std::filesystem::exists(configPath))
+                {
+                    projectConfigDir = std::filesystem::canonical(configPath).string();
+                }
+
+                // Register game DLL search path: {ProjectDir}/Binaries/{Platform}/
+#ifdef _WIN32
+                std::filesystem::path gameBin = std::filesystem::path(dir) / "Binaries" / "Win64";
+                if (std::filesystem::exists(gameBin))
+                {
+                    std::string gameBinStr = std::filesystem::canonical(gameBin).string();
+                    FModuleManager::Get().AddDllSearchPath(gameBinStr);
+                    std::printf("[FEngineLoop] Game DLL search path: %s\n", gameBinStr.c_str());
+                }
+#endif
             }
         }
     }
@@ -193,7 +235,8 @@ int32_t FEngineLoop::Init()
     // so game modules can register factories (e.g. GameInstance factory)
     LoadModulesForPhase(ELoadingPhase::Default);
 
-    // Auto-discover and load all module DLLs from the executable directory.
+    // Auto-discover and load all module DLLs from the executable directory
+    // and registered DLL search paths (game/plugin directories).
     // This loads game module DLLs that aren't implicitly linked to the EXE,
     // triggers their FModuleInitializerEntry registration, then calls
     // StartupModule() on each newly discovered module.
@@ -211,7 +254,17 @@ int32_t FEngineLoop::Init()
 #endif
         if (!binDir.empty())
         {
+            // Load engine DLLs from EXE directory
             FModuleManager::Get().LoadModulesFromDirectory(binDir);
+
+            // Load game/plugin DLLs from registered search paths
+            for (const auto& searchPath : FModuleManager::Get().GetDllSearchPaths())
+            {
+                if (searchPath != binDir)
+                {
+                    FModuleManager::Get().LoadModulesFromDirectory(searchPath);
+                }
+            }
         }
         else
         {
