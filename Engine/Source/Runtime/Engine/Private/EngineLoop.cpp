@@ -199,6 +199,23 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
                     FModuleManager::Get().AddDllSearchPath(gameBinStr);
                     std::printf("[FEngineLoop] Game DLL search path: %s\n", gameBinStr.c_str());
                 }
+
+                // Register plugin DLL search paths: {ProjectDir}/Plugins/*/Binaries/{Platform}/
+                std::filesystem::path pluginsDir = std::filesystem::path(dir) / "Plugins";
+                if (std::filesystem::exists(pluginsDir) && std::filesystem::is_directory(pluginsDir))
+                {
+                    for (const auto& entry : std::filesystem::directory_iterator(pluginsDir))
+                    {
+                        if (!entry.is_directory()) continue;
+                        std::filesystem::path pluginBin = entry.path() / "Binaries" / "Win64";
+                        if (std::filesystem::exists(pluginBin))
+                        {
+                            std::string pluginBinStr = std::filesystem::canonical(pluginBin).string();
+                            FModuleManager::Get().AddDllSearchPath(pluginBinStr);
+                            std::printf("[FEngineLoop] Plugin DLL search path: %s\n", pluginBinStr.c_str());
+                        }
+                    }
+                }
 #endif
             }
         }
