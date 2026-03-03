@@ -316,3 +316,53 @@ jobs:
 
       - name: "ThirdParty.NlohmannJson: Test"
         run: ctest --test-dir build-nlohmann-json --output-on-failure -C Release
+
+  # ---------------------------------------------------------------------------
+  # Stage 6: Package EnigmaArcade (Shipping) — runs after all tests pass
+  # ---------------------------------------------------------------------------
+  package-enigma-arcade:
+    name: Package EnigmaArcade
+    needs: [build-enigma-arcade, scaffolding-build, cpp-unit-tests, engine-module-validation]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download BuildTool
+        uses: actions/download-artifact@v4
+        with:
+          name: buildtool
+          path: Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/
+
+      - name: Package EnigmaArcade (Shipping)
+        shell: pwsh
+        run: |
+          $bt = "Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
+          & $bt package EnigmaArcade -o PackageOutput
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Verify package output
+        shell: pwsh
+        run: |
+          $pkgDir = "PackageOutput/Win64"
+          if (-not (Test-Path $pkgDir)) {
+            Write-Host "Package directory not found: $pkgDir" -ForegroundColor Red
+            exit 1
+          }
+          $exes = Get-ChildItem -Path $pkgDir -Filter "*.exe" -Recurse
+          if ($exes.Count -eq 0) {
+            Write-Host "No executables found in package" -ForegroundColor Red
+            exit 1
+          }
+          Write-Host "Package contents:" -ForegroundColor Green
+          Get-ChildItem -Path $pkgDir -Recurse | ForEach-Object {
+            Write-Host "  $($_.FullName.Replace((Get-Location).Path + '\', ''))"
+          }
+
+      - name: Upload packaged game
+        uses: actions/upload-artifact@v4
+        with:
+          name: EnigmaArcade-Win64-Shipping
+          path: PackageOutput/Win64/
+          retention-days: 30
