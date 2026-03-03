@@ -4,6 +4,7 @@ namespace BuildTool.Build;
 
 using BuildTool.Generators;
 using BuildTool.Models;
+using BuildTool.Scanners;
 
 /// <summary>
 /// Context for post-build binary placement and manifest generation.
@@ -12,9 +13,6 @@ public sealed class PostBuildContext
 {
     /// <summary>CMake build output directory (contains compiled binaries).</summary>
     public required string CmakeBuildDir { get; init; }
-
-    /// <summary>Target output directory (e.g., {ProjectRoot}/Binaries/Win64/).</summary>
-    public required string OutputDir { get; init; }
 
     /// <summary>Project name used in binary naming.</summary>
     public required string ProjectName { get; init; }
@@ -27,14 +25,17 @@ public sealed class PostBuildContext
 }
 
 /// <summary>
-/// Post-build step: copies compiled binaries to the output directory and generates manifest files.
+/// Post-build step: copies compiled binaries to categorized output directories
+/// and generates manifest files.
 ///
 /// Modular (Development/DebugGame/Debug/Test):
-///   - Copies all .exe/.dll/.pdb flat to Binaries/Win64/
-///   - Generates .modules and .target manifests
+///   - Engine module DLLs → {EngineRoot}/Binaries/{Platform}/
+///   - Game module DLLs + EXE → {ProjectRoot}/Binaries/{Platform}/
+///   - Plugin module DLLs → {ProjectRoot}/Plugins/{PluginName}/Binaries/{Platform}/
+///   - Generates per-category .modules and .target manifests
 ///
 /// Monolithic (Shipping):
-///   - Copies only the monolithic .exe and .pdb (no module DLLs)
+///   - Copies only the monolithic .exe and .pdb to {ProjectRoot}/Binaries/{Platform}/
 ///   - Generates .target with LinkType="Monolithic"
 ///   - No .modules file (not needed for monolithic)
 /// </summary>
@@ -46,31 +47,40 @@ public static class PostBuildStep
     public static BuildResult Execute(PostBuildContext context)
     {
         var config = context.BuildOptions.Configuration;
+        var platform = context.BuildOptions.Platform;
         bool isMonolithic = config == BuildConfiguration.Shipping;
         string linkType = isMonolithic ? "Monolithic" : "Modular";
 
+        string engineOutputDir = Path.Combine(context.ScanResult.EngineRoot, "Binaries", platform);
+        string gameOutputDir = Path.Combine(context.ScanResult.ProjectRoot, "Binaries", platform);
+
         Console.WriteLine($"[PostBuild] Mode: {linkType} ({config})");
         Console.WriteLine($"[PostBuild] Source: {context.CmakeBuildDir}");
-        Console.WriteLine($"[PostBuild] Output: {context.OutputDir}");
+        Console.WriteLine($"[PostBuild] Engine output: {engineOutputDir}");
+        Console.WriteLine($"[PostBuild] Game output:   {gameOutputDir}");
 
         try
         {
-            // 1. Ensure output directory exists
-            Directory.CreateDirectory(context.OutputDir);
-
-            // 2. Copy binaries from CMake build dir to output dir
-            int copied = isMonolithic
-                ? CopyMonolithicBinaries(context.CmakeBuildDir, context.OutputDir)
-                : CopyModularBinaries(context.CmakeBuildDir, context.OutputDir);
+            // 1. Copy binaries from CMake build dir to categorized output dirs
+            int copied;
+            if (isMonolithic)
+            {
+                Directory.CreateDirectory(gameOutputDir);
+                copied = CopyMonolithicBinaries(context.CmakeBuildDir, gameOutputDir);
+            }
+            else
+            {
+                copied = CopyModularBinaries(context);
+            }
 
             Console.WriteLine($"[PostBuild] Copied {copied} file(s)");
 
-            // 3. Generate manifests via ManifestGenerator
+            // 2. Generate manifests via ManifestGenerator
             var manifestResult = GenerateManifests(context, linkType);
             if (!manifestResult.Success)
                 return BuildResult.Fail("Manifest generation failed", manifestResult.Error);
 
-            // 4. Write manifest files to disk
+            // 3. Write project-relative manifest files to disk
             foreach (var (relativePath, content) in manifestResult.Files)
             {
                 string fullPath = Path.Combine(context.ScanResult.ProjectRoot, relativePath);
@@ -82,8 +92,21 @@ public static class PostBuildStep
                 Console.WriteLine($"[PostBuild] Manifest: {relativePath}");
             }
 
+            // 4. Write engine-relative manifest files to disk
+            foreach (var (relativePath, content) in manifestResult.EngineFiles)
+            {
+                string fullPath = Path.Combine(context.ScanResult.EngineRoot, relativePath);
+                string? dir = Path.GetDirectoryName(fullPath);
+                if (dir is not null)
+                    Directory.CreateDirectory(dir);
+
+                File.WriteAllText(fullPath, content);
+                Console.WriteLine($"[PostBuild] Engine manifest: {relativePath}");
+            }
+
+            int totalManifests = manifestResult.Files.Count + manifestResult.EngineFiles.Count;
             return BuildResult.Ok(
-                $"Post-build completed: {copied} binaries, {manifestResult.Files.Count} manifests ({linkType})");
+                $"Post-build completed: {copied} binaries, {totalManifests} manifests ({linkType})");
         }
         catch (IOException ex)
         {
@@ -98,21 +121,123 @@ public static class PostBuildStep
     }
 
     /// <summary>
-    /// Copy all .exe, .dll, .pdb files flat from build directory to output directory.
-    /// Used for Modular builds (Development/DebugGame/Debug/Test).
+    /// Copy modular binaries to categorized output directories based on module type.
+    /// Engine modules → Engine/Binaries/, Game modules → Project/Binaries/,
+    /// Plugin modules → Plugins/{Name}/Binaries/.
     /// </summary>
-    private static int CopyModularBinaries(string buildDir, string outputDir)
+    private static int CopyModularBinaries(PostBuildContext context)
     {
+        var scan = context.ScanResult;
+        var config = context.BuildOptions.Configuration;
+        var platform = context.BuildOptions.Platform;
+        string projectName = context.ProjectName;
+
+        // Build filename → output directory mapping
+        var fileOutputMap = BuildOutputDirectoryMap(
+            scan, projectName, config, platform);
+
+        // Ensure all output directories exist
+        foreach (var dir in fileOutputMap.Values.Distinct(StringComparer.OrdinalIgnoreCase))
+            Directory.CreateDirectory(dir);
+
         int count = 0;
         foreach (var pattern in new[] { "*.exe", "*.dll", "*.pdb" })
         {
-            foreach (var file in FindFiles(buildDir, pattern))
+            foreach (var file in FindFiles(context.CmakeBuildDir, pattern))
             {
-                CopyFileFlat(file, outputDir);
-                count++;
+                string fileName = Path.GetFileName(file);
+
+                // For PDB files, derive the output dir from the matching DLL/EXE
+                string? outputDir = null;
+                if (fileName.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase))
+                {
+                    string dllName = Path.ChangeExtension(fileName, ".dll");
+                    string exeName = Path.ChangeExtension(fileName, ".exe");
+                    if (fileOutputMap.TryGetValue(dllName, out outputDir) ||
+                        fileOutputMap.TryGetValue(exeName, out outputDir))
+                    {
+                        // Found matching binary
+                    }
+                }
+                else
+                {
+                    fileOutputMap.TryGetValue(fileName, out outputDir);
+                }
+
+                if (outputDir is not null)
+                {
+                    CopyFileFlat(file, outputDir);
+                    count++;
+                }
+                else
+                {
+                    Console.WriteLine($"  [Skip] {fileName} (no matching module)");
+                }
             }
         }
         return count;
+    }
+
+    /// <summary>
+    /// Build a mapping from binary filename to target output directory.
+    /// Classifies each module's DLL based on EngineModules, GameModules, and PluginScanResult.
+    /// </summary>
+    internal static Dictionary<string, string> BuildOutputDirectoryMap(
+        ProjectScanner.ScanResult scan,
+        string projectName,
+        BuildConfiguration config,
+        string platform)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        string engineOutputDir = Path.Combine(scan.EngineRoot, "Binaries", platform);
+        string gameOutputDir = Path.Combine(scan.ProjectRoot, "Binaries", platform);
+
+        // Engine modules (including Launch DLL) → Engine/Binaries/
+        foreach (var (name, _) in scan.EngineModules)
+        {
+            var dllName = ManifestGenerator.GetDllFileName(projectName, name, config, platform);
+            map[dllName] = engineOutputDir;
+        }
+
+        // Third-party modules → Engine/Binaries/
+        foreach (var (name, rules) in scan.ThirdPartyModules)
+        {
+            if (rules.IsHeaderOnly) continue;
+            var dllName = ManifestGenerator.GetDllFileName(projectName, name, config, platform);
+            map[dllName] = engineOutputDir;
+        }
+
+        // Game modules → Project/Binaries/
+        foreach (var (name, _) in scan.GameModules)
+        {
+            var dllName = ManifestGenerator.GetDllFileName(projectName, name, config, platform);
+            map[dllName] = gameOutputDir;
+        }
+
+        // Plugin modules → Plugins/{PluginName}/Binaries/
+        foreach (var (pluginName, descriptor) in scan.PluginScanResult.EnabledPlugins)
+        {
+            string pluginOutputDir = Path.Combine(
+                scan.ProjectRoot, "Plugins", pluginName, "Binaries", platform);
+            foreach (var moduleDesc in descriptor.Modules)
+            {
+                if (scan.PluginScanResult.Modules.TryGetValue(moduleDesc.Name, out var rules) && !rules.IsHeaderOnly)
+                {
+                    var dllName = ManifestGenerator.GetDllFileName(projectName, moduleDesc.Name, config, platform);
+                    map[dllName] = pluginOutputDir;
+                }
+            }
+        }
+
+        // EXE: Modular builds → Engine/Binaries/ (alongside engine DLLs, like UE)
+        //       Shipping → Project/Binaries/ (monolithic, no DLL dependencies)
+        var exeName = config == BuildConfiguration.Development
+            ? $"{projectName}.exe"
+            : $"{projectName}-{platform}-{config}.exe";
+        map[exeName] = config == BuildConfiguration.Shipping ? gameOutputDir : engineOutputDir;
+
+        return map;
     }
 
     /// <summary>
@@ -190,18 +315,32 @@ public static class PostBuildStep
 
     /// <summary>
     /// Generate manifest files (.modules, .target) via ManifestGenerator.
+    /// Passes engine module names for engine/game .modules separation.
     /// </summary>
     private static ManifestGenerator.GenerateResult GenerateManifests(
         PostBuildContext context, string linkType)
     {
+        var scan = context.ScanResult;
+
+        // Build engine module name set (engine + third-party non-header-only)
+        var engineModuleNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in scan.EngineModules.Keys)
+            engineModuleNames.Add(name);
+        foreach (var (name, rules) in scan.ThirdPartyModules)
+        {
+            if (!rules.IsHeaderOnly)
+                engineModuleNames.Add(name);
+        }
+
         var generator = new ManifestGenerator();
         return generator.Generate(
             context.ProjectName,
-            context.ScanResult.AllModules,
+            scan.AllModules,
             context.BuildOptions.Configuration,
             context.BuildOptions.Platform,
-            context.ScanResult.GameTarget,
-            context.ScanResult.PluginScanResult,
-            linkType: linkType);
+            scan.GameTarget,
+            scan.PluginScanResult,
+            linkType: linkType,
+            engineModuleNames: engineModuleNames);
     }
 }

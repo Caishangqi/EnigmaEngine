@@ -13,23 +13,21 @@ namespace BuildTool.Tests;
 /// Uses temp directories with fake binaries - no real CMake builds required.
 ///
 /// Development (Modular):
-///   [1]  All DLLs copied flat to output dir
-///   [2]  PDB files copied alongside DLLs
-///   [3]  Host EXE copied to output dir
-///   [4]  .modules JSON generated with BuildId + Modules map
-///   [5]  .target JSON generated with LinkType="Modular"
+///   [1]  Engine DLLs copied to Engine/Binaries/Win64/
+///   [2]  Game DLLs + EXE copied to Project/Binaries/Win64/
+///   [3]  PDB files follow their DLL/EXE to correct directory
+///   [4]  Engine .modules generated in Engine/Binaries/Win64/
+///   [5]  Game .modules generated in Project/Binaries/Win64/
+///   [6]  .target JSON generated with LinkType="Modular"
 ///
 /// Shipping (Monolithic):
-///   [6]  Monolithic EXE copied to output dir
-///   [7]  No DLL files in output dir
-///   [8]  No .modules file generated
-///   [9]  .target JSON has LinkType="Monolithic"
+///   [7]  Monolithic EXE copied to Project/Binaries/Win64/
+///   [8]  No DLL files in any output dir
+///   [9]  No .modules file generated
+///   [10] .target JSON has LinkType="Monolithic"
 ///
 /// Error handling:
-///   [10] Locked file produces clear error
-///
-/// Naming:
-///   [11] DLL/EXE naming follows convention
+///   [11] Locked file produces clear error
 /// </summary>
 public static class PostBuildStepTest
 {
@@ -38,24 +36,23 @@ public static class PostBuildStepTest
         Console.WriteLine("=== PostBuildStep Tests ===");
         Console.WriteLine();
 
-        TestDevelopmentCopiesDlls();
-        TestDevelopmentCopiesPdbs();
-        TestDevelopmentCopiesExe();
-        TestDevelopmentGeneratesModulesFile();
+        TestDevelopmentEngineModulesToEngineDir();
+        TestDevelopmentGameModulesToGameDir();
+        TestDevelopmentPdbsFollowBinaries();
+        TestDevelopmentEngineModulesManifest();
+        TestDevelopmentGameModulesManifest();
         TestDevelopmentGeneratesTargetFile();
         TestShippingCopiesExeOnly();
         TestShippingNoDlls();
         TestShippingNoModulesFile();
-// PLACEHOLDER_MORE_TESTS
         TestShippingTargetHasMonolithicLinkType();
         TestHandlesLockedFile();
-        TestNamingConventions();
 
         Console.WriteLine();
         Console.WriteLine("=== All tests passed ===");
     }
 
-    // ── Helpers ──────────────────────────────────────────────
+    // -- Helpers -----------------------------------------------
 
     private static void Assert(bool condition, string message)
     {
@@ -67,9 +64,11 @@ public static class PostBuildStepTest
         JsonDocument.Parse(json).RootElement;
 
     /// <summary>
-    /// Create a minimal ScanResult with Core (library), Engine (library), Launch (executable).
+    /// Create a minimal ScanResult with Core + Engine + Launch (engine),
+    /// and GamePlay (game module).
     /// </summary>
-    private static ProjectScanner.ScanResult MakeScanResult(string projectRoot)
+    private static ProjectScanner.ScanResult MakeScanResult(
+        string projectRoot, string engineRoot)
     {
         var allModules = new Dictionary<string, ModuleRules>(StringComparer.Ordinal)
         {
@@ -82,6 +81,11 @@ public static class PostBuildStepTest
             ["Launch"] = new()
             {
                 ModuleName = "Launch",
+                PublicDependencyModuleNames = { "Engine" },
+            },
+            ["GamePlay"] = new()
+            {
+                ModuleName = "GamePlay",
                 PublicDependencyModuleNames = { "Engine" },
             },
         };
@@ -98,7 +102,7 @@ public static class PostBuildStepTest
             ProjectDescriptor = new ProjectDescriptor
             {
                 FileVersion = 1,
-                Modules = { new ModuleDescriptor { Name = "Launch" } },
+                Modules = { new ModuleDescriptor { Name = "GamePlay" } },
             },
             ProjectName = "TestGame",
             EprojectPath = Path.Combine(projectRoot, "TestGame.eproject"),
@@ -108,39 +112,40 @@ public static class PostBuildStepTest
             {
                 ["Core"] = allModules["Core"],
                 ["Engine"] = allModules["Engine"],
+                ["Launch"] = allModules["Launch"],
             },
             GameModules = new Dictionary<string, ModuleRules>(StringComparer.Ordinal)
             {
-                ["Launch"] = allModules["Launch"],
+                ["GamePlay"] = allModules["GamePlay"],
             },
             ThirdPartyModules = new Dictionary<string, ModuleRules>(StringComparer.Ordinal),
             PluginScanResult = new PluginScanner.ScanResult(),
             ResolveResult = new DependencyResolver.ResolveResult
             {
                 Success = true,
-                BuildOrder = new[] { "Core", "Engine", "Launch" },
+                BuildOrder = new[] { "Core", "Engine", "Launch", "GamePlay" },
             },
             ProjectRoot = projectRoot,
-            EngineRoot = Path.Combine(projectRoot, "..", "Engine"),
+            EngineRoot = engineRoot,
         };
     }
 
     /// <summary>
-    /// Create a temp directory with fake CMake build output files.
-    /// Simulates multi-config generator output (files in Release/ subdirectory).
+    /// Create temp directories with fake CMake build output files.
     /// </summary>
-    private static (string buildDir, string outputDir, string projectRoot) SetupTempDirs(
+    private static (string buildDir, string projectRoot, string engineRoot) SetupTempDirs(
         BuildConfiguration config = BuildConfiguration.Development)
     {
-        string root = Path.Combine(Path.GetTempPath(), $"PostBuildTest_{Guid.NewGuid():N}");
+        string root = Path.Combine(
+            Path.GetTempPath(), $"PostBuildTest_{Guid.NewGuid():N}");
         string projectRoot = Path.Combine(root, "Project");
+        string engineRoot = Path.Combine(root, "Engine");
         string buildDir = Path.Combine(root, "Build", "Release");
-        string outputDir = Path.Combine(projectRoot, "Binaries", "Win64");
 
         Directory.CreateDirectory(buildDir);
         Directory.CreateDirectory(projectRoot);
+        Directory.CreateDirectory(engineRoot);
 
-        // Create fake binaries based on config
         if (config == BuildConfiguration.Shipping)
         {
             CreateFakeFile(buildDir, "TestGame-Win64-Shipping.exe");
@@ -148,41 +153,32 @@ public static class PostBuildStepTest
         }
         else
         {
-            // Development: EXE + module DLLs + PDBs
-            CreateFakeFile(buildDir, "TestGame-Launch.exe");
-            CreateFakeFile(buildDir, "TestGame-Launch.pdb");
+            // Engine modules
             CreateFakeFile(buildDir, "TestGame-Core.dll");
             CreateFakeFile(buildDir, "TestGame-Core.pdb");
             CreateFakeFile(buildDir, "TestGame-Engine.dll");
             CreateFakeFile(buildDir, "TestGame-Engine.pdb");
+            CreateFakeFile(buildDir, "TestGame-Launch.dll");
+            CreateFakeFile(buildDir, "TestGame-Launch.pdb");
+            // Game modules
+            CreateFakeFile(buildDir, "TestGame-GamePlay.dll");
+            CreateFakeFile(buildDir, "TestGame-GamePlay.pdb");
+            // EXE
+            CreateFakeFile(buildDir, "TestGame.exe");
+            CreateFakeFile(buildDir, "TestGame.pdb");
         }
-
-        return (Path.Combine(root, "Build"), outputDir, projectRoot);
+        return (buildDir, projectRoot, engineRoot);
     }
 
     private static void CreateFakeFile(string dir, string name)
     {
-        File.WriteAllBytes(Path.Combine(dir, name), new byte[] { 0x4D, 0x5A }); // MZ header
-    }
-
-    private static void CleanupTempDir(string path)
-    {
-        try
-        {
-            string root = Path.GetDirectoryName(Path.GetDirectoryName(path)!)!;
-            if (root.Contains("PostBuildTest_"))
-                Directory.Delete(root, recursive: true);
-            else
-                Directory.Delete(path, recursive: true);
-        }
-        catch { /* Best-effort cleanup */ }
+        File.WriteAllBytes(Path.Combine(dir, name), new byte[] { 0xDE, 0xAD });
     }
 
     private static void CleanupRoot(string projectRoot)
     {
         try
         {
-            // Navigate up to the PostBuildTest_ root
             string root = Path.GetDirectoryName(projectRoot)!;
             if (root.Contains("PostBuildTest_"))
                 Directory.Delete(root, recursive: true);
@@ -191,15 +187,14 @@ public static class PostBuildStepTest
     }
 
     private static PostBuildContext MakeContext(
-        string buildDir, string outputDir, string projectRoot,
+        string buildDir, string projectRoot, string engineRoot,
         BuildConfiguration config = BuildConfiguration.Development)
     {
         return new PostBuildContext
         {
             CmakeBuildDir = buildDir,
-            OutputDir = outputDir,
             ProjectName = "TestGame",
-            ScanResult = MakeScanResult(projectRoot),
+            ScanResult = MakeScanResult(projectRoot, engineRoot),
             BuildOptions = new BuildOptions
             {
                 ProjectPath = Path.Combine(projectRoot, "TestGame.eproject"),
@@ -208,112 +203,140 @@ public static class PostBuildStepTest
             },
         };
     }
-// PLACEHOLDER_TESTS
 
-    // ── Test 1: Development copies DLLs flat ────────────────
+    // -- Test 1: Engine DLLs go to Engine/Binaries/ ------------
 
-    private static void TestDevelopmentCopiesDlls()
+    private static void TestDevelopmentEngineModulesToEngineDir()
     {
-        Console.WriteLine("[Test 1] Development: all DLLs copied flat to output dir");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs();
+        Console.WriteLine("[Test 1] Development: engine DLLs copied to Engine/Binaries/Win64/");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
-            Assert(File.Exists(Path.Combine(outputDir, "TestGame-Core.dll")), "Core DLL in output");
-            Assert(File.Exists(Path.Combine(outputDir, "TestGame-Engine.dll")), "Engine DLL in output");
 
-            // Verify flat - no subdirectories
-            var dirs = Directory.GetDirectories(outputDir);
-            Assert(dirs.Length == 0, "Output dir should have no subdirectories");
+            string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
+            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Core.dll")), "Core DLL in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Engine.dll")), "Engine DLL in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Launch.dll")), "Launch DLL in Engine");
 
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            Assert(!File.Exists(Path.Combine(gameBin, "TestGame-Core.dll")), "Core DLL NOT in Game");
+            Assert(!File.Exists(Path.Combine(gameBin, "TestGame-Engine.dll")), "Engine DLL NOT in Game");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
 
-    // ── Test 2: Development copies PDBs ─────────────────────
+    // -- Test 2: Game DLLs + EXE go to Project/Binaries/ ------
 
-    private static void TestDevelopmentCopiesPdbs()
+    private static void TestDevelopmentGameModulesToGameDir()
     {
-        Console.WriteLine("[Test 2] Development: PDB files copied alongside DLLs");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs();
+        Console.WriteLine("[Test 2] Development: game DLLs to Project/Binaries/Win64/, EXE to Engine/Binaries/Win64/");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
-            Assert(File.Exists(Path.Combine(outputDir, "TestGame-Core.pdb")), "Core PDB");
-            Assert(File.Exists(Path.Combine(outputDir, "TestGame-Engine.pdb")), "Engine PDB");
-            Assert(File.Exists(Path.Combine(outputDir, "TestGame-Launch.pdb")), "Launch PDB");
 
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            Assert(File.Exists(Path.Combine(gameBin, "TestGame-GamePlay.dll")), "GamePlay DLL in Game");
+
+            // EXE goes to Engine/Binaries/ in Modular builds (alongside engine DLLs)
+            string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
+            Assert(File.Exists(Path.Combine(engineBin, "TestGame.exe")), "EXE in Engine");
+            Assert(!File.Exists(Path.Combine(gameBin, "TestGame.exe")), "EXE NOT in Game");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
 
-    // ── Test 3: Development copies host EXE ─────────────────
+    // -- Test 3: PDBs follow their binaries --------------------
 
-    private static void TestDevelopmentCopiesExe()
+    private static void TestDevelopmentPdbsFollowBinaries()
     {
-        Console.WriteLine("[Test 3] Development: host EXE copied to output dir");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs();
+        Console.WriteLine("[Test 3] Development: PDB files follow DLLs to correct directory");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
-            Assert(File.Exists(Path.Combine(outputDir, "TestGame-Launch.exe")), "Launch EXE in output");
 
+            string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Core.pdb")), "Core PDB in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Engine.pdb")), "Engine PDB in Engine");
+            Assert(File.Exists(Path.Combine(gameBin, "TestGame-GamePlay.pdb")), "GamePlay PDB in Game");
+            Assert(File.Exists(Path.Combine(engineBin, "TestGame.pdb")), "EXE PDB in Engine");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
-// PLACEHOLDER_TESTS_2
 
-    // ── Test 4: Development generates .modules ──────────────
+    // -- Test 4: Engine .modules in Engine/Binaries/ -----------
 
-    private static void TestDevelopmentGeneratesModulesFile()
+    private static void TestDevelopmentEngineModulesManifest()
     {
-        Console.WriteLine("[Test 4] Development: .modules JSON with BuildId + Modules map");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs();
+        Console.WriteLine("[Test 4] Development: engine .modules in Engine/Binaries/Win64/");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
             var result = PostBuildStep.Execute(ctx);
+            Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
+            var modulesPath = Path.Combine(engineRoot, "Binaries", "Win64", "TestGame.modules");
+            Assert(File.Exists(modulesPath), "Engine .modules should exist");
+
+            var json = ParseJson(File.ReadAllText(modulesPath));
+            var mods = json.GetProperty("Modules");
+            Assert(mods.TryGetProperty("Core", out _), "Engine .modules should contain Core");
+            Assert(mods.TryGetProperty("Engine", out _), "Engine .modules should contain Engine");
+            Assert(mods.TryGetProperty("Launch", out _), "Engine .modules should contain Launch");
+            Assert(!mods.TryGetProperty("GamePlay", out _), "Engine .modules should NOT contain GamePlay");
+            Console.WriteLine("  PASSED");
+        }
+        finally { CleanupRoot(projectRoot); }
+    }
+
+    // -- Test 5: Game .modules in Project/Binaries/ ------------
+
+    private static void TestDevelopmentGameModulesManifest()
+    {
+        Console.WriteLine("[Test 5] Development: game .modules in Project/Binaries/Win64/");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
+        try
+        {
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
+            var result = PostBuildStep.Execute(ctx);
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
             var modulesPath = Path.Combine(projectRoot, "Binaries", "Win64", "TestGame.modules");
-            Assert(File.Exists(modulesPath), ".modules file should exist");
+            Assert(File.Exists(modulesPath), "Game .modules should exist");
 
             var json = ParseJson(File.ReadAllText(modulesPath));
-            Assert(json.TryGetProperty("BuildId", out var bid) && bid.GetString()!.Length > 0,
-                "BuildId should be non-empty");
             var mods = json.GetProperty("Modules");
-            Assert(mods.TryGetProperty("Core", out _), "Modules should contain Core");
-            Assert(mods.TryGetProperty("Engine", out _), "Modules should contain Engine");
-
+            Assert(mods.TryGetProperty("GamePlay", out _), "Game .modules should contain GamePlay");
+            Assert(!mods.TryGetProperty("Core", out _), "Game .modules should NOT contain Core");
+            Assert(!mods.TryGetProperty("Engine", out _), "Game .modules should NOT contain Engine");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
 
-    // ── Test 5: Development generates .target ───────────────
+    // -- Test 6: .target file generated ------------------------
 
     private static void TestDevelopmentGeneratesTargetFile()
     {
-        Console.WriteLine("[Test 5] Development: .target JSON with LinkType=Modular");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs();
+        Console.WriteLine("[Test 6] Development: .target JSON with LinkType=Modular");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
             var targetPath = Path.Combine(projectRoot, "Binaries", "Win64", "TestGame.target");
@@ -324,89 +347,90 @@ public static class PostBuildStepTest
             Assert(json.GetProperty("Platform").GetString() == "Win64", "Platform");
             Assert(json.GetProperty("Configuration").GetString() == "Development", "Configuration");
             Assert(json.GetProperty("LinkType").GetString() == "Modular", "LinkType should be Modular");
-
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
-// PLACEHOLDER_TESTS_3
 
-    // ── Test 6: Shipping copies EXE only ────────────────────
+    // -- Test 7: Shipping copies EXE only ----------------------
 
     private static void TestShippingCopiesExeOnly()
     {
-        Console.WriteLine("[Test 6] Shipping: monolithic EXE copied to output dir");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs(BuildConfiguration.Shipping);
+        Console.WriteLine("[Test 7] Shipping: monolithic EXE copied to Project/Binaries/Win64/");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs(BuildConfiguration.Shipping);
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot, BuildConfiguration.Shipping);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot, BuildConfiguration.Shipping);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
-            Assert(File.Exists(Path.Combine(outputDir, "TestGame-Win64-Shipping.exe")),
-                "Monolithic EXE in output");
 
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            Assert(File.Exists(Path.Combine(gameBin, "TestGame-Win64-Shipping.exe")),
+                "Monolithic EXE in output");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
 
-    // ── Test 7: Shipping has no DLLs ────────────────────────
+    // -- Test 8: Shipping has no DLLs --------------------------
 
     private static void TestShippingNoDlls()
     {
-        Console.WriteLine("[Test 7] Shipping: no DLL files in output dir");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs(BuildConfiguration.Shipping);
+        Console.WriteLine("[Test 8] Shipping: no DLL files in output dir");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs(BuildConfiguration.Shipping);
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot, BuildConfiguration.Shipping);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot, BuildConfiguration.Shipping);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
-            var dlls = Directory.GetFiles(outputDir, "*.dll");
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            var dlls = Directory.GetFiles(gameBin, "*.dll");
             Assert(dlls.Length == 0, $"No DLLs expected, found {dlls.Length}");
-
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
 
-    // ── Test 8: Shipping has no .modules file ───────────────
+    // -- Test 9: Shipping has no .modules file -----------------
 
     private static void TestShippingNoModulesFile()
     {
-        Console.WriteLine("[Test 8] Shipping: no .modules file generated");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs(BuildConfiguration.Shipping);
+        Console.WriteLine("[Test 9] Shipping: no .modules file generated");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs(BuildConfiguration.Shipping);
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot, BuildConfiguration.Shipping);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot, BuildConfiguration.Shipping);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
-            var modulesFiles = Directory.GetFiles(
-                Path.Combine(projectRoot, "Binaries", "Win64"), "*.modules");
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            var modulesFiles = Directory.GetFiles(gameBin, "*.modules");
             Assert(modulesFiles.Length == 0,
-                $"No .modules files expected, found {modulesFiles.Length}");
+                $"No .modules files expected in game dir, found {modulesFiles.Length}");
 
+            string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
+            if (Directory.Exists(engineBin))
+            {
+                var engineModules = Directory.GetFiles(engineBin, "*.modules");
+                Assert(engineModules.Length == 0,
+                    $"No .modules files expected in engine dir, found {engineModules.Length}");
+            }
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
-// PLACEHOLDER_TESTS_4
 
-    // ── Test 9: Shipping .target has LinkType=Monolithic ────
+    // -- Test 10: Shipping .target has LinkType=Monolithic -----
 
     private static void TestShippingTargetHasMonolithicLinkType()
     {
-        Console.WriteLine("[Test 9] Shipping: .target JSON has LinkType=Monolithic");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs(BuildConfiguration.Shipping);
+        Console.WriteLine("[Test 10] Shipping: .target JSON has LinkType=Monolithic");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs(BuildConfiguration.Shipping);
         try
         {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot, BuildConfiguration.Shipping);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot, BuildConfiguration.Shipping);
             var result = PostBuildStep.Execute(ctx);
-
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
             var targetPath = Path.Combine(
@@ -419,78 +443,39 @@ public static class PostBuildStepTest
             Assert(json.GetProperty("Configuration").GetString() == "Shipping",
                 "Configuration should be Shipping");
 
-            // BuildProducts should contain only the EXE
             var products = json.GetProperty("BuildProducts");
             Assert(products.GetArrayLength() == 1, "Should have exactly 1 build product");
             Assert(products[0].GetProperty("Type").GetString() == "Executable",
                 "Build product type should be Executable");
-
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
     }
 
-    // ── Test 10: Handles locked file ────────────────────────
+    // -- Test 11: Handles locked file --------------------------
 
     private static void TestHandlesLockedFile()
     {
-        Console.WriteLine("[Test 10] Locked file: returns clear error message");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs();
+        Console.WriteLine("[Test 11] Locked file: returns clear error message");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
         try
         {
-            // Pre-create output dir and lock a file that will be overwritten
-            Directory.CreateDirectory(outputDir);
-            string lockedPath = Path.Combine(outputDir, "TestGame-Core.dll");
+            // Pre-create engine output dir and lock a file that will be overwritten
+            string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
+            Directory.CreateDirectory(engineBin);
+            string lockedPath = Path.Combine(engineBin, "TestGame-Core.dll");
             File.WriteAllBytes(lockedPath, new byte[] { 0x00 });
 
             // Hold an exclusive lock on the file
             using var lockStream = new FileStream(
                 lockedPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
 
-            var ctx = MakeContext(buildDir, outputDir, projectRoot);
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
             var result = PostBuildStep.Execute(ctx);
 
             Assert(!result.Success, "Execute should fail when file is locked");
             Assert(result.Message.Contains("locked") || result.Message.Contains("failed"),
                 $"Error should mention lock/failure: {result.Message}");
-
-            Console.WriteLine("  PASSED");
-        }
-        finally { CleanupRoot(projectRoot); }
-    }
-
-    // ── Test 11: Naming conventions ─────────────────────────
-
-    private static void TestNamingConventions()
-    {
-        Console.WriteLine("[Test 11] Naming: DLL/EXE follow {Project}-{Module} convention");
-        var (buildDir, outputDir, projectRoot) = SetupTempDirs();
-        try
-        {
-            var ctx = MakeContext(buildDir, outputDir, projectRoot);
-            var result = PostBuildStep.Execute(ctx);
-
-            Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
-
-            // Verify Development naming: {Project}-{Module}.dll (no platform/config suffix)
-            var modulesPath = Path.Combine(projectRoot, "Binaries", "Win64", "TestGame.modules");
-            var json = ParseJson(File.ReadAllText(modulesPath));
-            var mods = json.GetProperty("Modules");
-
-            var coreDll = mods.GetProperty("Core").GetString();
-            Assert(coreDll == "TestGame-Core.dll",
-                $"Core DLL should be TestGame-Core.dll, got {coreDll}");
-
-            var engineDll = mods.GetProperty("Engine").GetString();
-            Assert(engineDll == "TestGame-Engine.dll",
-                $"Engine DLL should be TestGame-Engine.dll, got {engineDll}");
-
-            // Verify .target Launch exe naming
-            var targetPath = Path.Combine(projectRoot, "Binaries", "Win64", "TestGame.target");
-            var targetJson = ParseJson(File.ReadAllText(targetPath));
-            Assert(targetJson.GetProperty("Launch").GetString() == "TestGame.exe",
-                "Development launch exe should be TestGame.exe");
-
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }

@@ -36,13 +36,26 @@ public sealed class ManifestGenerator
         public string? Error { get; init; }
 
         /// <summary>
-        /// Generated manifest files: relative path → JSON content.
-        /// Paths use forward slashes and are relative to the project root.
+        /// Generated manifest files relative to the project root.
+        /// Paths use forward slashes.
         /// </summary>
         public Dictionary<string, string> Files { get; init; } = new(StringComparer.Ordinal);
 
-        public static GenerateResult Ok(Dictionary<string, string> files) =>
-            new() { Success = true, Files = files };
+        /// <summary>
+        /// Generated manifest files relative to the engine root.
+        /// Paths use forward slashes.
+        /// </summary>
+        public Dictionary<string, string> EngineFiles { get; init; } = new(StringComparer.Ordinal);
+
+        public static GenerateResult Ok(
+            Dictionary<string, string> files,
+            Dictionary<string, string>? engineFiles = null) =>
+            new()
+            {
+                Success = true,
+                Files = files,
+                EngineFiles = engineFiles ?? new(StringComparer.Ordinal),
+            };
 
         public static GenerateResult Fail(string error) =>
             new() { Success = false, Error = error };
@@ -59,6 +72,8 @@ public sealed class ManifestGenerator
     /// <param name="targetRules">Optional target rules for .target file generation.</param>
     /// <param name="pluginScanResult">Optional plugin scan result for per-plugin .modules files.</param>
     /// <param name="buildId">Optional explicit BuildId. If null, generated from timestamp.</param>
+    /// <param name="engineModuleNames">Set of engine module names for separating engine/game .modules files.
+    /// If null, all non-plugin modules go into the project .modules file (legacy behavior).</param>
     /// <returns>A <see cref="GenerateResult"/> with file path → content mappings.</returns>
     public GenerateResult Generate(
         string projectName,
@@ -68,7 +83,8 @@ public sealed class ManifestGenerator
         TargetRules? targetRules = null,
         PluginScanner.ScanResult? pluginScanResult = null,
         string? buildId = null,
-        string linkType = "Modular")
+        string linkType = "Modular",
+        IReadOnlySet<string>? engineModuleNames = null)
     {
         if (modules.Count == 0 && (pluginScanResult is null || pluginScanResult.Modules.Count == 0))
         {
@@ -77,38 +93,64 @@ public sealed class ManifestGenerator
 
         var id = buildId ?? GenerateBuildId();
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
+        var engineFiles = new Dictionary<string, string>(StringComparer.Ordinal);
 
         // Collect non-plugin module names (exclude plugin modules)
         var pluginModuleNames = pluginScanResult is not null
             ? new HashSet<string>(pluginScanResult.Modules.Keys, StringComparer.Ordinal)
             : new HashSet<string>(StringComparer.Ordinal);
 
-        var projectModules = new Dictionary<string, ModuleRules>(StringComparer.Ordinal);
+        // Separate engine modules and game modules
+        var engineModulesDict = new Dictionary<string, ModuleRules>(StringComparer.Ordinal);
+        var gameModulesDict = new Dictionary<string, ModuleRules>(StringComparer.Ordinal);
+
         foreach (var (name, rules) in modules)
         {
-            if (!pluginModuleNames.Contains(name))
-                projectModules[name] = rules;
+            if (pluginModuleNames.Contains(name))
+                continue;
+
+            if (engineModuleNames is not null && engineModuleNames.Contains(name))
+                engineModulesDict[name] = rules;
+            else
+                gameModulesDict[name] = rules;
         }
+
         var manifestName = GetManifestBaseName(projectName, configuration, platform);
 
-        // 1. Project .modules file (skip for Monolithic - no separate DLLs)
-        if (linkType != "Monolithic")
+        // 1. Engine .modules file (relative to engine root)
+        if (linkType != "Monolithic" && engineModulesDict.Count > 0)
         {
             var modulesPath = $"Binaries/{platform}/{manifestName}.modules";
-            var modulesJson = GenerateModulesJson(id, projectModules, projectName, configuration, platform);
-            files[modulesPath] = modulesJson;
+            var modulesJson = GenerateModulesJson(id, engineModulesDict, projectName, configuration, platform);
+            engineFiles[modulesPath] = modulesJson;
         }
 
-        // 2. Project .target file
+        // 2. Game .modules file (relative to project root, skip for Monolithic)
+        if (linkType != "Monolithic")
+        {
+            // If no engine separation, include all non-plugin modules (legacy behavior)
+            var gameModules = engineModuleNames is not null
+                ? gameModulesDict
+                : MergeModules(engineModulesDict, gameModulesDict);
+            if (gameModules.Count > 0)
+            {
+                var modulesPath = $"Binaries/{platform}/{manifestName}.modules";
+                var modulesJson = GenerateModulesJson(id, gameModules, projectName, configuration, platform);
+                files[modulesPath] = modulesJson;
+            }
+        }
+
+        // 3. Project .target file
         if (targetRules is not null)
         {
             var targetPath = $"Binaries/{platform}/{manifestName}.target";
+            var allProjectModules = MergeModules(engineModulesDict, gameModulesDict);
             var targetJson = GenerateTargetJson(
-                id, projectName, projectModules, targetRules, configuration, platform, pluginScanResult, linkType);
+                id, projectName, allProjectModules, targetRules, configuration, platform, pluginScanResult, linkType);
             files[targetPath] = targetJson;
         }
 
-        // 3. Per-plugin .modules files (skip for Monolithic)
+        // 4. Per-plugin .modules files (skip for Monolithic)
         if (linkType != "Monolithic" && pluginScanResult is not null)
         {
             foreach (var (pluginName, descriptor) in pluginScanResult.EnabledPlugins)
@@ -128,7 +170,7 @@ public sealed class ManifestGenerator
             }
         }
 
-        return GenerateResult.Ok(files);
+        return GenerateResult.Ok(files, engineFiles);
     }
     // ── .modules JSON generation ───────────────────────────────
 
@@ -279,6 +321,21 @@ public sealed class ManifestGenerator
     internal static string GenerateBuildId()
     {
         return DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Merge two module dictionaries into one.
+    /// </summary>
+    private static Dictionary<string, ModuleRules> MergeModules(
+        IReadOnlyDictionary<string, ModuleRules> a,
+        IReadOnlyDictionary<string, ModuleRules> b)
+    {
+        var merged = new Dictionary<string, ModuleRules>(StringComparer.Ordinal);
+        foreach (var (k, v) in a) merged[k] = v;
+        foreach (var (k, v) in b) merged[k] = v;
+        return merged;
     }
 
     // ── JSON model types ────────────────────────────────────────

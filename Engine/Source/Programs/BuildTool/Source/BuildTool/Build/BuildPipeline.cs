@@ -103,11 +103,9 @@ public sealed class BuildPipeline
 
         // [6] Post-build step
         Console.WriteLine("[Step 5/6] Running post-build step ...");
-        string outputDir = Path.Combine(scan.ProjectRoot, "Binaries", platform);
         var postBuildResult = PostBuildStep.Execute(new PostBuildContext
         {
             CmakeBuildDir = buildDir,
-            OutputDir = outputDir,
             ProjectName = scan.ProjectName,
             ScanResult = scan,
             BuildOptions = options,

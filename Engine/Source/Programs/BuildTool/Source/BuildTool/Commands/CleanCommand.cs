@@ -1,10 +1,11 @@
+using BuildTool.Build;
 using BuildTool.Models;
 
 namespace BuildTool.Commands;
 
 /// <summary>
 /// Cleans build artifacts for the specified project.
-/// Deletes: Intermediate/Build/ and Binaries/ directories.
+/// Deletes: Intermediate/Build/ and Binaries/ for project, engine, and plugins.
 /// Does NOT delete Intermediate/ root (preserves non-build intermediates).
 /// Idempotent - succeeds even if directories don't exist.
 /// </summary>
@@ -21,21 +22,66 @@ public sealed class CleanCommand : ICommand
         Console.WriteLine($"  Project: {options.ProjectPath}");
         Console.WriteLine();
 
-        string projectRoot = Path.GetFullPath(options.ProjectPath);
+        // Use ProjectScanner to resolve engine root and plugin paths
+        ProjectScanner.ScanResult? scan = null;
+        try
+        {
+            scan = ProjectScanner.Scan(options.ProjectPath);
+        }
+        catch
+        {
+            // Fallback: if scan fails, clean only project root
+        }
 
-        // Directories to clean
-        string intermediateBuildDir = Path.Combine(projectRoot, "Intermediate", "Build");
-        string binariesDir = Path.Combine(projectRoot, "Binaries");
+        string projectRoot = scan?.ProjectRoot ?? Path.GetFullPath(options.ProjectPath);
+        string? engineRoot = scan?.EngineRoot;
 
         int deletedCount = 0;
 
-        // [1] Delete Intermediate/Build/
-        deletedCount += TryDeleteDirectory(intermediateBuildDir, "Intermediate/Build");
+        // [1] Project: Intermediate/Build/
+        deletedCount += TryDeleteDirectory(
+            Path.Combine(projectRoot, "Intermediate", "Build"), "Project: Intermediate/Build");
 
-        // [2] Delete Binaries/
-        deletedCount += TryDeleteDirectory(binariesDir, "Binaries");
+        // [2] Project: Binaries/
+        deletedCount += TryDeleteDirectory(
+            Path.Combine(projectRoot, "Binaries"), "Project: Binaries");
 
-        // [3] Delete generated CMakeLists.txt at project root
+        // [3] Engine: Intermediate/Build/
+        if (engineRoot is not null)
+        {
+            deletedCount += TryDeleteDirectory(
+                Path.Combine(engineRoot, "Intermediate", "Build"), "Engine: Intermediate/Build");
+        }
+
+        // [4] Engine: Binaries/
+        if (engineRoot is not null)
+        {
+            deletedCount += TryDeleteDirectory(
+                Path.Combine(engineRoot, "Binaries"), "Engine: Binaries");
+        }
+
+        // [5] Engine: Intermediate/ProjectFiles/
+        if (engineRoot is not null)
+        {
+            deletedCount += TryDeleteDirectory(
+                Path.Combine(engineRoot, "Intermediate", "ProjectFiles"), "Engine: Intermediate/ProjectFiles");
+        }
+
+        // [6] Plugin: Binaries/ and Intermediate/Build/
+        if (scan?.PluginScanResult is not null)
+        {
+            string pluginsDir = Path.Combine(projectRoot, "Plugins");
+            foreach (var (pluginName, _) in scan.PluginScanResult.EnabledPlugins)
+            {
+                string pluginRoot = Path.Combine(pluginsDir, pluginName);
+                deletedCount += TryDeleteDirectory(
+                    Path.Combine(pluginRoot, "Binaries"), $"Plugin {pluginName}: Binaries");
+                deletedCount += TryDeleteDirectory(
+                    Path.Combine(pluginRoot, "Intermediate", "Build"), $"Plugin {pluginName}: Intermediate/Build");
+            }
+        }
+
+        // [7] Delete generated CMakeLists.txt at project root
         string cmakeListsPath = Path.Combine(projectRoot, "CMakeLists.txt");
         deletedCount += TryDeleteFile(cmakeListsPath, "CMakeLists.txt");
 
