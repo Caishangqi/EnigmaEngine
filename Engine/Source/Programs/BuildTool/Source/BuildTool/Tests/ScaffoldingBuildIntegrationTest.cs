@@ -24,7 +24,8 @@ public static class ScaffoldingBuildIntegrationTest
     private static string _projectName = null!;
     private static string _projectDir = null!;
     private static string _eprojectPath = null!;
-    private static string _outputDir = null!;
+    private static string _outputDir = null!;       // Project/Binaries/Win64 (game DLLs, Shipping EXE)
+    private static string _engineOutputDir = null!;  // Engine/Binaries/Win64 (engine DLLs, Modular EXE)
 
     public static void Run()
     {
@@ -65,6 +66,7 @@ public static class ScaffoldingBuildIntegrationTest
         _projectDir = Path.Combine(Path.GetFullPath(gamesDir), _projectName);
         _eprojectPath = Path.Combine(_projectDir, $"{_projectName}.eproject");
         _outputDir = Path.Combine(_projectDir, "Binaries", "Win64");
+        _engineOutputDir = Path.Combine(_engineRoot, "Binaries", "Win64");
 
         // Clean stale directory if exists
         if (Directory.Exists(_projectDir))
@@ -174,41 +176,52 @@ public static class ScaffoldingBuildIntegrationTest
         var buildResult = RunBuild(config);
         Assert(buildResult.Success,
             $"{config} build failed: {buildResult.Message} | {buildResult.ErrorDetail}");
-        Assert(Directory.Exists(_outputDir), "Binaries/Win64/ should exist");
+
+        // Modular: EXE in Engine/Binaries/, Shipping: EXE in Project/Binaries/
+        string exeDir = expectModular ? _engineOutputDir : _outputDir;
+        Assert(Directory.Exists(exeDir), $"{exeDir} should exist");
 
         // 3. Verify EXE naming
-        var exePath = Path.Combine(_outputDir, expectedExeName);
+        var exePath = Path.Combine(exeDir, expectedExeName);
         Assert(File.Exists(exePath),
-            $"Expected EXE '{expectedExeName}' not found. " +
-            $"Files: [{string.Join(", ", Directory.GetFiles(_outputDir).Select(Path.GetFileName))}]");
+            $"Expected EXE '{expectedExeName}' not found in {exeDir}. " +
+            $"Files: [{string.Join(", ", Directory.GetFiles(exeDir).Select(Path.GetFileName))}]");
         Console.WriteLine($"  EXE: {expectedExeName} ✓");
 
         // 4. Verify DLL presence/absence
-        var dllFiles = Directory.GetFiles(_outputDir, "*.dll");
         if (expectModular)
         {
-            Assert(dllFiles.Length > 0,
-                $"{config} (modular) should have DLLs, found none");
+            // Engine DLLs in Engine/Binaries/
+            var engineDlls = Directory.GetFiles(_engineOutputDir, "*.dll");
+            Assert(engineDlls.Length > 0,
+                $"{config} (modular) should have engine DLLs in Engine/Binaries/");
+
+            // Game DLLs in Project/Binaries/
+            Assert(Directory.Exists(_outputDir), "Project/Binaries/Win64/ should exist");
+            var gameDlls = Directory.GetFiles(_outputDir, "*.dll");
+            Assert(gameDlls.Length > 0,
+                $"{config} (modular) should have game DLLs in Project/Binaries/");
 
             // Verify DLL naming convention
             if (!string.IsNullOrEmpty(dllSuffix))
             {
-                // Non-Development: DLLs have config suffix
-                var hasSuffixedDll = dllFiles.Any(f =>
+                var hasSuffixedDll = engineDlls.Concat(gameDlls).Any(f =>
                     Path.GetFileName(f).Contains(dllSuffix, StringComparison.OrdinalIgnoreCase));
                 Assert(hasSuffixedDll,
-                    $"DLLs should contain '{dllSuffix}' suffix for {config}. " +
-                    $"Found: [{string.Join(", ", dllFiles.Select(Path.GetFileName))}]");
+                    $"DLLs should contain '{dllSuffix}' suffix for {config}");
             }
-            Console.WriteLine($"  DLLs: {dllFiles.Length} (modular) ✓");
+            Console.WriteLine($"  DLLs: {engineDlls.Length} engine + {gameDlls.Length} game (modular) ✓");
 
-            // .modules manifest should exist
-            var modulesFiles = Directory.GetFiles(_outputDir, "*.modules");
-            Assert(modulesFiles.Length > 0, $"{config} should have .modules manifest");
+            // .modules manifest should exist in both locations
+            var engineModules = Directory.GetFiles(_engineOutputDir, "*.modules");
+            var gameModules = Directory.GetFiles(_outputDir, "*.modules");
+            Assert(engineModules.Length > 0, $"{config} should have .modules manifest in Engine/Binaries/");
+            Assert(gameModules.Length > 0, $"{config} should have .modules manifest in Project/Binaries/");
         }
         else
         {
-            // Shipping: monolithic - no DLLs
+            // Shipping: monolithic - no DLLs in project dir
+            var dllFiles = Directory.GetFiles(_outputDir, "*.dll");
             Assert(dllFiles.Length == 0,
                 $"Shipping (monolithic) should have NO DLLs. " +
                 $"Found: [{string.Join(", ", dllFiles.Select(Path.GetFileName))}]");
@@ -229,7 +242,7 @@ public static class ScaffoldingBuildIntegrationTest
 
         // 5. Run EXE and verify output
         Console.WriteLine($"  Running {expectedExeName}...");
-        var output = RunExeAndCapture(exePath);
+        var output = RunExeAndCapture(exePath, expectModular ? _projectDir : null);
 
         Assert(output.Contains("[GuardedMain]"),
             $"Output should contain '[GuardedMain]'. Got:\n{Truncate(output, 500)}");
@@ -288,7 +301,7 @@ public static class ScaffoldingBuildIntegrationTest
     /// Launch the EXE, wait for engine startup, capture output.
     /// Kills the process after startup markers are found or timeout.
     /// </summary>
-    private static string RunExeAndCapture(string exePath)
+    private static string RunExeAndCapture(string exePath, string? projectDir = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -297,8 +310,13 @@ public static class ScaffoldingBuildIntegrationTest
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(exePath)!,
+            WorkingDirectory = projectDir ?? Path.GetDirectoryName(exePath)!,
         };
+
+        if (projectDir is not null)
+        {
+            psi.ArgumentList.Add($"--project-dir={projectDir}");
+        }
 
         Process? proc = null;
         try
@@ -376,6 +394,14 @@ public static class ScaffoldingBuildIntegrationTest
         {
             if (Directory.Exists(_projectDir))
                 Directory.Delete(_projectDir, recursive: true);
+
+            // Clean engine binaries produced by this project
+            if (Directory.Exists(_engineOutputDir))
+            {
+                foreach (var file in Directory.GetFiles(_engineOutputDir, $"{_projectName}*"))
+                    File.Delete(file);
+            }
+
             Console.WriteLine("  Done.");
         }
         catch (Exception ex)
