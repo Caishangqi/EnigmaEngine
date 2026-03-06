@@ -1,6 +1,7 @@
 using BuildTool.Analysis;
 using BuildTool.Generators;
 using BuildTool.Models;
+using BuildTool.Scanners;
 using BuildTool.Utils;
 
 namespace BuildTool.Tests;
@@ -27,6 +28,8 @@ public static class SolutionGeneratorTest
         TestThirdPartyFolder();
         TestPackageConfigBuildMapping();
         TestNoRulesFilesInSolution();
+        TestEnginePluginRouting();
+        TestPerPluginSubFolders();
 
         Console.WriteLine();
         Console.WriteLine("=== All tests passed ===");
@@ -53,6 +56,7 @@ public static class SolutionGeneratorTest
         var pluginModules = new Dictionary<string, ModuleRules>
         {
             ["ArcadeFeature"] = new() { ModuleName = "ArcadeFeature", ModuleDirectory = Path.Combine(tempDir, "EnigmaArcade", "Plugins", "ArcadeFeature", "Source", "ArcadeFeature") },
+            ["EnhancedInput"] = new() { ModuleName = "EnhancedInput", ModuleDirectory = Path.Combine(tempDir, "Engine", "Plugins", "EnhancedInput", "Source", "EnhancedInput") },
         };
 
         // Build adjacency list: Launch→[Engine,Core], Engine→[Core], Core→[]
@@ -64,16 +68,38 @@ public static class SolutionGeneratorTest
             ["EnigmaArcade"] = ["Engine", "Core"],
             ["ArcadeGameplay"] = ["Engine", "Core"],
             ["ArcadeFeature"] = ["Engine", "Core"],
+            ["EnhancedInput"] = ["Engine", "Core"],
         };
 
         var resolveResult = new DependencyResolver.ResolveResult
         {
             Success = true,
-            BuildOrder = ["Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature"],
+            BuildOrder = ["Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature", "EnhancedInput"],
             AdjacencyList = adjacency,
         };
 
         var gameTarget = new TargetRules { TargetName = "EnigmaArcade", Type = TargetType.Game };
+
+        // PluginScanResult with both game and engine plugins
+        var pluginScanResult = new PluginScanner.ScanResult
+        {
+            Modules = new Dictionary<string, ModuleRules>(pluginModules, StringComparer.Ordinal),
+            EnabledPlugins = new Dictionary<string, PluginDescriptor>(StringComparer.Ordinal)
+            {
+                ["ArcadeFeature"] = new()
+                {
+                    FileVersion = 1,
+                    FriendlyName = "ArcadeFeature",
+                    Modules = [new ModuleDescriptor { Name = "ArcadeFeature" }],
+                },
+                ["EnhancedInput"] = new()
+                {
+                    FileVersion = 1,
+                    FriendlyName = "EnhancedInput",
+                    Modules = [new ModuleDescriptor { Name = "EnhancedInput" }],
+                },
+            },
+        };
 
         var input = new SolutionGenerator.GenerateInput
         {
@@ -85,6 +111,7 @@ public static class SolutionGeneratorTest
             PluginModules = pluginModules,
             ResolveResult = resolveResult,
             GameTarget = gameTarget,
+            PluginScanResult = pluginScanResult,
         };
 
         return (tempDir, input);
@@ -138,7 +165,7 @@ public static class SolutionGeneratorTest
             Assert(result.Success, $"Generate failed: {result.Error}");
             string content = File.ReadAllText(result.OutputPath);
             string cppGuid = "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}";
-            foreach (var name in new[] { "Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature" })
+            foreach (var name in new[] { "Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature", "EnhancedInput" })
                 Assert(content.Contains($"Project(\"{cppGuid}\") = \"{name}\""), $"Missing C++ project: {name}");
             Console.WriteLine("  PASSED");
         }
@@ -221,12 +248,18 @@ public static class SolutionGeneratorTest
             Assert(content.Contains($"{arcadeGuid} = {gameSrcGuid}"), "EnigmaArcade should be nested under Games/EnigmaArcade/Source");
 
             string featureGuid = $"{{{GuidGenerator.GenerateForProject("ArcadeFeature").ToString().ToUpperInvariant()}}}";
-            string pluginsGuid = $"{{{GuidGenerator.GenerateForFolder("Plugins").ToString().ToUpperInvariant()}}}";
-            Assert(content.Contains($"{featureGuid} = {pluginsGuid}"), "ArcadeFeature should be nested under Plugins");
+            string arcadeFeatureFolderGuid = $"{{{GuidGenerator.GenerateForFolder("Games/EnigmaArcade/Plugins/ArcadeFeature").ToString().ToUpperInvariant()}}}";
+            Assert(content.Contains($"{featureGuid} = {arcadeFeatureFolderGuid}"), "ArcadeFeature should be nested under Games/EnigmaArcade/Plugins/ArcadeFeature");
 
             // Plugins folder should be nested under Games/EnigmaArcade (sibling of Source)
+            string pluginsGuid = $"{{{GuidGenerator.GenerateForFolder("Plugins").ToString().ToUpperInvariant()}}}";
             string gameProjectGuid = $"{{{GuidGenerator.GenerateForFolder("Games/EnigmaArcade").ToString().ToUpperInvariant()}}}";
             Assert(content.Contains($"{pluginsGuid} = {gameProjectGuid}"), "Plugins should be nested under Games/EnigmaArcade");
+
+            // Engine/Plugins folder should be nested under Engine
+            string enginePluginsGuid = $"{{{GuidGenerator.GenerateForFolder("Engine/Plugins").ToString().ToUpperInvariant()}}}";
+            string engineGuid = $"{{{GuidGenerator.GenerateForFolder("Engine").ToString().ToUpperInvariant()}}}";
+            Assert(content.Contains($"{enginePluginsGuid} = {engineGuid}"), "Engine/Plugins should be nested under Engine");
 
             Console.WriteLine("  PASSED");
         }
@@ -393,6 +426,75 @@ public static class SolutionGeneratorTest
             Assert(!content.Contains("\"Rules Files\""), "Rules Files project should not exist");
             string folderGuid = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}";
             Assert(!content.Contains($"Project(\"{folderGuid}\") = \"Rules\""), "Rules folder should not exist");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally { Cleanup(tempDir); }
+    }
+
+    private static void TestEnginePluginRouting()
+    {
+        Console.WriteLine("[Test 13] Engine plugin: EnhancedInput nested under Engine/Plugins/EnhancedInput");
+        var (tempDir, input) = CreateTestInput();
+        try
+        {
+            var result = new SolutionGenerator().Generate(input);
+            Assert(result.Success, $"Generate failed: {result.Error}");
+            string content = File.ReadAllText(result.OutputPath);
+
+            // EnhancedInput project should exist
+            string cppGuid = "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}";
+            Assert(content.Contains($"Project(\"{cppGuid}\") = \"EnhancedInput\""), "Missing EnhancedInput project");
+
+            // EnhancedInput should be nested under Engine/Plugins/EnhancedInput sub-folder
+            string eiProjGuid = $"{{{GuidGenerator.GenerateForProject("EnhancedInput").ToString().ToUpperInvariant()}}}";
+            string eiFolderGuid = $"{{{GuidGenerator.GenerateForFolder("Engine/Plugins/EnhancedInput").ToString().ToUpperInvariant()}}}";
+            Assert(content.Contains($"{eiProjGuid} = {eiFolderGuid}"),
+                "EnhancedInput should be nested under Engine/Plugins/EnhancedInput");
+
+            // Engine/Plugins/EnhancedInput folder should be nested under Engine/Plugins
+            string enginePluginsGuid = $"{{{GuidGenerator.GenerateForFolder("Engine/Plugins").ToString().ToUpperInvariant()}}}";
+            Assert(content.Contains($"{eiFolderGuid} = {enginePluginsGuid}"),
+                "Engine/Plugins/EnhancedInput should be nested under Engine/Plugins");
+
+            // EnhancedInput vcxproj path should reference Engine/Plugins/
+            Assert(content.Contains("Engine\\Plugins\\EnhancedInput\\Intermediate\\ProjectFiles\\EnhancedInput.vcxproj"),
+                "EnhancedInput vcxproj should be under Engine/Plugins/");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally { Cleanup(tempDir); }
+    }
+
+    private static void TestPerPluginSubFolders()
+    {
+        Console.WriteLine("[Test 14] Per-plugin sub-folders: each plugin gets its own solution folder");
+        var (tempDir, input) = CreateTestInput();
+        try
+        {
+            var result = new SolutionGenerator().Generate(input);
+            Assert(result.Success, $"Generate failed: {result.Error}");
+            string content = File.ReadAllText(result.OutputPath);
+
+            string folderGuid = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}";
+
+            // Per-plugin solution folders should exist
+            Assert(content.Contains($"Project(\"{folderGuid}\") = \"ArcadeFeature\""),
+                "Missing ArcadeFeature per-plugin folder");
+            Assert(content.Contains($"Project(\"{folderGuid}\") = \"EnhancedInput\""),
+                "Missing EnhancedInput per-plugin folder");
+
+            // ArcadeFeature folder under Games/EnigmaArcade/Plugins
+            string afFolderGuid = $"{{{GuidGenerator.GenerateForFolder("Games/EnigmaArcade/Plugins/ArcadeFeature").ToString().ToUpperInvariant()}}}";
+            string gamePluginsGuid = $"{{{GuidGenerator.GenerateForFolder("Plugins").ToString().ToUpperInvariant()}}}";
+            Assert(content.Contains($"{afFolderGuid} = {gamePluginsGuid}"),
+                "ArcadeFeature folder should be under Games/EnigmaArcade/Plugins");
+
+            // EnhancedInput folder under Engine/Plugins
+            string eiFolderGuid = $"{{{GuidGenerator.GenerateForFolder("Engine/Plugins/EnhancedInput").ToString().ToUpperInvariant()}}}";
+            string enginePluginsGuid = $"{{{GuidGenerator.GenerateForFolder("Engine/Plugins").ToString().ToUpperInvariant()}}}";
+            Assert(content.Contains($"{eiFolderGuid} = {enginePluginsGuid}"),
+                "EnhancedInput folder should be under Engine/Plugins");
 
             Console.WriteLine("  PASSED");
         }

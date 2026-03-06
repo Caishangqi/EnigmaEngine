@@ -70,6 +70,7 @@ public sealed class SolutionGenerator
             string gameProjectGuid    = FormatGuid(GuidGenerator.GenerateForFolder($"Games/{input.ProjectName}"));
             string gameSrcGuid        = FormatGuid(GuidGenerator.GenerateForFolder($"Games/{input.ProjectName}/Source"));
             string pluginsFolderGuid  = FormatGuid(GuidGenerator.GenerateForFolder("Plugins"));
+            string enginePluginsFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Plugins"));
             string runtimeFolderGuid   = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Runtime"));
             string thirdPartyFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/ThirdParty"));
             string programsFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Programs"));
@@ -80,6 +81,7 @@ public sealed class SolutionGenerator
                 (engineSrcGuid,      "Source",            engineFolderGuid),
                 (runtimeFolderGuid,  "Runtime",           engineSrcGuid),
                 (thirdPartyFolderGuid, "ThirdParty",     engineSrcGuid),
+                (enginePluginsFolderGuid, "Plugins",     engineFolderGuid),
                 (gamesFolderGuid,    "Games",             null),
                 (gameProjectGuid,    input.ProjectName,   gamesFolderGuid),
                 (gameSrcGuid,        "Source",            gameProjectGuid),
@@ -118,6 +120,45 @@ public sealed class SolutionGenerator
             {
                 sb.AppendLine($"Project(\"{TypeGuids.SolutionFolder}\") = \"{name}\", \"{name}\", \"{guid}\"");
                 sb.AppendLine("EndProject");
+            }
+
+            // --- Per-plugin solution sub-folders ---
+            // Determine engine vs game plugin by checking module directory against engine root.
+            // Create a sub-folder per plugin under Engine/Plugins/ or Games/{Project}/Plugins/.
+            var perPluginFolderGuids = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (input.PluginScanResult is not null)
+            {
+                string normalizedEngineRoot = input.EngineRootPath.Replace('\\', '/').TrimEnd('/') + "/";
+
+                foreach (var (pluginName, descriptor) in input.PluginScanResult.EnabledPlugins)
+                {
+                    // Determine if this is an engine plugin
+                    bool isEnginePlugin = false;
+                    foreach (var moduleDesc in descriptor.Modules)
+                    {
+                        if (input.PluginModules.TryGetValue(moduleDesc.Name, out var rules))
+                        {
+                            string normalizedDir = rules.ModuleDirectory.Replace('\\', '/').TrimEnd('/') + "/";
+                            if (normalizedDir.StartsWith(normalizedEngineRoot, StringComparison.OrdinalIgnoreCase))
+                            {
+                                isEnginePlugin = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    string folderSeed = isEnginePlugin
+                        ? $"Engine/Plugins/{pluginName}"
+                        : $"Games/{input.ProjectName}/Plugins/{pluginName}";
+                    string pluginFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder(folderSeed));
+                    string parentGuid = isEnginePlugin ? enginePluginsFolderGuid : pluginsFolderGuid;
+
+                    perPluginFolderGuids[pluginName] = pluginFolderGuid;
+
+                    sb.AppendLine($"Project(\"{TypeGuids.SolutionFolder}\") = \"{pluginName}\", \"{pluginName}\", \"{pluginFolderGuid}\"");
+                    sb.AppendLine("EndProject");
+                    nesting.Add((pluginFolderGuid, parentGuid));
+                }
             }
 
             // --- Engine module projects ---
@@ -164,25 +205,43 @@ public sealed class SolutionGenerator
                         pluginModuleToPlugin[moduleDesc.Name] = pluginName;
                 }
             }
-            foreach (var (moduleName, _) in input.PluginModules)
+
+            string normalizedEngineRootForPlugins = input.EngineRootPath.Replace('\\', '/').TrimEnd('/') + "/";
+
+            foreach (var (moduleName, rules) in input.PluginModules)
             {
                 string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
                 string vcxprojRelative;
+                string parentFolderGuid;
+
                 if (pluginModuleToPlugin.TryGetValue(moduleName, out var ownerPlugin))
                 {
-                    string pluginIntermediateAbs = Path.Combine(
-                        input.ProjectRootPath, "Plugins", ownerPlugin, "Intermediate", "ProjectFiles");
+                    // Determine engine vs game plugin by module directory
+                    string normalizedDir = rules.ModuleDirectory.Replace('\\', '/').TrimEnd('/') + "/";
+                    bool isEnginePlugin = normalizedDir.StartsWith(normalizedEngineRootForPlugins, StringComparison.OrdinalIgnoreCase);
+
+                    string pluginIntermediateAbs = isEnginePlugin
+                        ? Path.Combine(input.EngineRootPath, "Plugins", ownerPlugin, "Intermediate", "ProjectFiles")
+                        : Path.Combine(input.ProjectRootPath, "Plugins", ownerPlugin, "Intermediate", "ProjectFiles");
+
                     vcxprojRelative = Path.GetRelativePath(input.ProjectRootPath, pluginIntermediateAbs)
                         .Replace('/', '\\') + $"\\{moduleName}.vcxproj";
+
+                    // Nest under per-plugin sub-folder if available, else under the appropriate Plugins folder
+                    if (perPluginFolderGuids.TryGetValue(ownerPlugin, out var perPluginGuid))
+                        parentFolderGuid = perPluginGuid;
+                    else
+                        parentFolderGuid = isEnginePlugin ? enginePluginsFolderGuid : pluginsFolderGuid;
                 }
                 else
                 {
                     vcxprojRelative = $"Intermediate\\ProjectFiles\\{moduleName}.vcxproj";
+                    parentFolderGuid = pluginsFolderGuid;
                 }
                 var deps = GetProjectDependencies(moduleName, input.ResolveResult, knownProjectNames);
 
                 WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, vcxprojRelative, projGuid, deps);
-                nesting.Add((projGuid, pluginsFolderGuid));
+                nesting.Add((projGuid, parentFolderGuid));
                 projectCount++;
             }
 

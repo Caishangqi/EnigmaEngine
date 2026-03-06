@@ -100,13 +100,21 @@ public sealed class GenerateProjectFilesCommand : ICommand
                 string? buildCsPath = Directory.GetFiles(rules.ModuleDirectory, "*.Build.cs").FirstOrDefault();
 
                 // Engine modules and third-party → Engine/Intermediate/ProjectFiles/
-                // Plugin modules → {ProjectRoot}/Plugins/{PluginName}/Intermediate/ProjectFiles/
+                // Plugin modules → Engine or Project Plugins/{PluginName}/Intermediate/ProjectFiles/
                 // Game modules → {ProjectRoot}/Intermediate/ProjectFiles/
                 string outputDir;
                 if (engineModuleNameSet.Contains(moduleName))
                     outputDir = engineIntermediateDir;
                 else if (pluginModuleToPlugin.TryGetValue(moduleName, out var pluginName))
-                    outputDir = Path.Combine(projectRoot, "Plugins", pluginName, "Intermediate", "ProjectFiles");
+                {
+                    // Determine engine vs game plugin by module directory
+                    string normalizedDir = rules.ModuleDirectory.Replace('\\', '/').TrimEnd('/') + "/";
+                    string normalizedEngineRoot = engineRoot.Replace('\\', '/').TrimEnd('/') + "/";
+                    if (normalizedDir.StartsWith(normalizedEngineRoot, StringComparison.OrdinalIgnoreCase))
+                        outputDir = Path.Combine(engineRoot, "Plugins", pluginName, "Intermediate", "ProjectFiles");
+                    else
+                        outputDir = Path.Combine(projectRoot, "Plugins", pluginName, "Intermediate", "ProjectFiles");
+                }
                 else
                     outputDir = gameIntermediateDir;
 
