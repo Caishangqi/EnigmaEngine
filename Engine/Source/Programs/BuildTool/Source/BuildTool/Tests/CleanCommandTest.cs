@@ -7,9 +7,10 @@ namespace BuildTool.Tests;
 
 /// <summary>
 /// Tests for CleanCommand:
-///   [1] Deletes Intermediate/Build/ and Binaries/ when they exist
+///   [1] Full clean: deletes Intermediate/Build/ and Binaries/ when they exist
 ///   [2] Idempotent - succeeds when no artifacts exist
-///   [3] Reports deleted item count in result message
+///   [3] Full clean: reports deleted item count in result message
+///   [4] Config-scoped clean: only deletes Intermediate/Build/{Config}/
 /// </summary>
 public static class CleanCommandTest
 {
@@ -18,20 +19,21 @@ public static class CleanCommandTest
         Console.WriteLine("=== CleanCommand Tests ===");
         Console.WriteLine();
 
-        TestDeletesIntermediateAndBinaries();
+        TestFullCleanDeletesIntermediateAndBinaries();
         TestIdempotent();
-        TestReportsDeletedCount();
+        TestFullCleanReportsDeletedCount();
+        TestConfigScopedClean();
 
         Console.WriteLine();
         Console.WriteLine("=== All CleanCommand tests passed ===");
     }
 
     /// <summary>
-    /// [Test 1] Create Intermediate/Build/ and Binaries/ with files, run clean, verify deleted.
+    /// [Test 1] Full clean: create Intermediate/Build/ and Binaries/ with files, run clean, verify deleted.
     /// </summary>
-    private static void TestDeletesIntermediateAndBinaries()
+    private static void TestFullCleanDeletesIntermediateAndBinaries()
     {
-        Console.WriteLine("[Test 1] Deletes Intermediate/Build/ and Binaries/");
+        Console.WriteLine("[Test 1] Full clean deletes Intermediate/Build/ and Binaries/");
 
         string tempDir = CreateTempProject();
         try
@@ -53,7 +55,7 @@ public static class CleanCommandTest
             Assert(File.Exists(Path.Combine(tempDir, "CMakeLists.txt")), "Pre: CMakeLists.txt should exist");
 
             // Act
-            var cmd = new CleanCommand();
+            var cmd = new CleanCommand { FullClean = true };
             var result = cmd.Execute(new BuildOptions { ProjectPath = tempDir });
 
             // Assert
@@ -104,11 +106,11 @@ public static class CleanCommandTest
     }
 
     /// <summary>
-    /// [Test 3] Verify result message reports correct deleted count.
+    /// [Test 3] Full clean: verify result message reports correct deleted count.
     /// </summary>
-    private static void TestReportsDeletedCount()
+    private static void TestFullCleanReportsDeletedCount()
     {
-        Console.WriteLine("[Test 3] Reports deleted item count");
+        Console.WriteLine("[Test 3] Full clean reports deleted item count");
 
         string tempDir = CreateTempProject();
         try
@@ -117,7 +119,7 @@ public static class CleanCommandTest
             string binaries = Path.Combine(tempDir, "Binaries");
             Directory.CreateDirectory(binaries);
 
-            var cmd = new CleanCommand();
+            var cmd = new CleanCommand { FullClean = true };
             var result = cmd.Execute(new BuildOptions { ProjectPath = tempDir });
 
             Assert(result.Success, "Clean should succeed");
@@ -131,6 +133,50 @@ public static class CleanCommandTest
             var result2 = cmd.Execute(new BuildOptions { ProjectPath = tempDir });
             Assert(result2.Success, "Clean should succeed");
             Assert(result2.Message.Contains("3 item(s)"), $"Should report 3 items deleted, got: {result2.Message}");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally
+        {
+            CleanupTemp(tempDir);
+        }
+    }
+
+    /// <summary>
+    /// [Test 4] Config-scoped clean: only deletes Intermediate/Build/{Config}/, preserves others.
+    /// </summary>
+    private static void TestConfigScopedClean()
+    {
+        Console.WriteLine("[Test 4] Config-scoped clean preserves other configurations");
+
+        string tempDir = CreateTempProject();
+        try
+        {
+            // Arrange: create multiple config build dirs
+            string buildRoot = Path.Combine(tempDir, "Intermediate", "Build");
+            string devDir = Path.Combine(buildRoot, "Development");
+            string shipDir = Path.Combine(buildRoot, "Shipping");
+            string binaries = Path.Combine(tempDir, "Binaries", "Win64");
+            Directory.CreateDirectory(devDir);
+            Directory.CreateDirectory(shipDir);
+            Directory.CreateDirectory(binaries);
+            File.WriteAllText(Path.Combine(devDir, "CMakeCache.txt"), "dummy");
+            File.WriteAllText(Path.Combine(shipDir, "CMakeCache.txt"), "dummy");
+            File.WriteAllText(Path.Combine(binaries, "TestApp.exe"), "dummy");
+
+            // Act: clean only Development (default config)
+            var cmd = new CleanCommand();
+            var result = cmd.Execute(new BuildOptions
+            {
+                ProjectPath = tempDir,
+                Configuration = BuildConfiguration.Development
+            });
+
+            // Assert
+            Assert(result.Success, "Clean should succeed");
+            Assert(!Directory.Exists(devDir), "Development build dir should be deleted");
+            Assert(Directory.Exists(shipDir), "Shipping build dir should be preserved");
+            Assert(Directory.Exists(binaries), "Binaries/ should be preserved");
 
             Console.WriteLine("  PASSED");
         }

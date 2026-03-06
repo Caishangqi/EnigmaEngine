@@ -5,21 +5,38 @@ namespace BuildTool.Commands;
 
 /// <summary>
 /// Cleans build artifacts for the specified project.
-/// Deletes: Intermediate/Build/ and Binaries/ for project, engine, and plugins.
-/// Does NOT delete Intermediate/ root (preserves non-build intermediates).
+///
+/// Configuration-aware clean (default):
+///   Only deletes Intermediate/Build/{Config}/ for project, engine, and plugins.
+///   Preserves Binaries/ (build overwrites in-place) and other configurations.
+///
+/// Full clean (--full flag or used internally by RebuildCommand):
+///   Deletes all Intermediate/Build/, Binaries/, ProjectFiles/, and CMakeLists.txt.
+///
 /// Idempotent - succeeds even if directories don't exist.
 /// </summary>
 public sealed class CleanCommand : ICommand
 {
+    /// <summary>
+    /// When true, performs a full clean (all configs, Binaries, ProjectFiles).
+    /// Set by RebuildCommand or --full CLI flag.
+    /// </summary>
+    public bool FullClean { get; set; }
+
     public string Name => "clean";
     public string Description => "Clean build artifacts for the specified project.";
 
     public BuildResult Execute(BuildOptions options)
     {
+        bool isFull = FullClean
+            || options.ExtraArguments.ContainsKey("full");
+        string configName = options.Configuration.ToString();
+
         Console.WriteLine("╔══════════════════════════════════════════════╗");
         Console.WriteLine("║         EnigmaEngine Clean                  ║");
         Console.WriteLine("╚══════════════════════════════════════════════╝");
         Console.WriteLine($"  Project: {options.ProjectPath}");
+        Console.WriteLine($"  Mode:    {(isFull ? "Full (all configurations)" : $"Config ({configName})")}");
         Console.WriteLine();
 
         // Use ProjectScanner to resolve engine root and plugin paths
@@ -38,52 +55,66 @@ public sealed class CleanCommand : ICommand
 
         int deletedCount = 0;
 
-        // [1] Project: Intermediate/Build/
-        deletedCount += TryDeleteDirectory(
-            Path.Combine(projectRoot, "Intermediate", "Build"), "Project: Intermediate/Build");
-
-        // [2] Project: Binaries/
-        deletedCount += TryDeleteDirectory(
-            Path.Combine(projectRoot, "Binaries"), "Project: Binaries");
-
-        // [3] Engine: Intermediate/Build/
-        if (engineRoot is not null)
+        if (isFull)
         {
+            // ── Full clean: delete everything (original behavior) ──
             deletedCount += TryDeleteDirectory(
-                Path.Combine(engineRoot, "Intermediate", "Build"), "Engine: Intermediate/Build");
-        }
-
-        // [4] Engine: Binaries/
-        if (engineRoot is not null)
-        {
+                Path.Combine(projectRoot, "Intermediate", "Build"), "Project: Intermediate/Build");
             deletedCount += TryDeleteDirectory(
-                Path.Combine(engineRoot, "Binaries"), "Engine: Binaries");
-        }
+                Path.Combine(projectRoot, "Binaries"), "Project: Binaries");
 
-        // [5] Engine: Intermediate/ProjectFiles/
-        if (engineRoot is not null)
-        {
-            deletedCount += TryDeleteDirectory(
-                Path.Combine(engineRoot, "Intermediate", "ProjectFiles"), "Engine: Intermediate/ProjectFiles");
-        }
-
-        // [6] Plugin: Binaries/ and Intermediate/Build/
-        if (scan?.PluginScanResult is not null)
-        {
-            string pluginsDir = Path.Combine(projectRoot, "Plugins");
-            foreach (var (pluginName, _) in scan.PluginScanResult.EnabledPlugins)
+            if (engineRoot is not null)
             {
-                string pluginRoot = Path.Combine(pluginsDir, pluginName);
                 deletedCount += TryDeleteDirectory(
-                    Path.Combine(pluginRoot, "Binaries"), $"Plugin {pluginName}: Binaries");
+                    Path.Combine(engineRoot, "Intermediate", "Build"), "Engine: Intermediate/Build");
                 deletedCount += TryDeleteDirectory(
-                    Path.Combine(pluginRoot, "Intermediate", "Build"), $"Plugin {pluginName}: Intermediate/Build");
+                    Path.Combine(engineRoot, "Binaries"), "Engine: Binaries");
+                deletedCount += TryDeleteDirectory(
+                    Path.Combine(engineRoot, "Intermediate", "ProjectFiles"), "Engine: Intermediate/ProjectFiles");
+            }
+
+            if (scan?.PluginScanResult is not null)
+            {
+                string pluginsDir = Path.Combine(projectRoot, "Plugins");
+                foreach (var (pluginName, _) in scan.PluginScanResult.EnabledPlugins)
+                {
+                    string pluginRoot = Path.Combine(pluginsDir, pluginName);
+                    deletedCount += TryDeleteDirectory(
+                        Path.Combine(pluginRoot, "Binaries"), $"Plugin {pluginName}: Binaries");
+                    deletedCount += TryDeleteDirectory(
+                        Path.Combine(pluginRoot, "Intermediate", "Build"), $"Plugin {pluginName}: Intermediate/Build");
+                }
+            }
+
+            string cmakeListsPath = Path.Combine(projectRoot, "CMakeLists.txt");
+            deletedCount += TryDeleteFile(cmakeListsPath, "CMakeLists.txt");
+        }
+        else
+        {
+            // ── Config-scoped clean: only Intermediate/Build/{Config}/ ──
+            deletedCount += TryDeleteDirectory(
+                Path.Combine(projectRoot, "Intermediate", "Build", configName),
+                $"Project: Intermediate/Build/{configName}");
+
+            if (engineRoot is not null)
+            {
+                deletedCount += TryDeleteDirectory(
+                    Path.Combine(engineRoot, "Intermediate", "Build", configName),
+                    $"Engine: Intermediate/Build/{configName}");
+            }
+
+            if (scan?.PluginScanResult is not null)
+            {
+                string pluginsDir = Path.Combine(projectRoot, "Plugins");
+                foreach (var (pluginName, _) in scan.PluginScanResult.EnabledPlugins)
+                {
+                    string pluginRoot = Path.Combine(pluginsDir, pluginName);
+                    deletedCount += TryDeleteDirectory(
+                        Path.Combine(pluginRoot, "Intermediate", "Build", configName),
+                        $"Plugin {pluginName}: Intermediate/Build/{configName}");
+                }
             }
         }
-
-        // [7] Delete generated CMakeLists.txt at project root
-        string cmakeListsPath = Path.Combine(projectRoot, "CMakeLists.txt");
-        deletedCount += TryDeleteFile(cmakeListsPath, "CMakeLists.txt");
 
         Console.WriteLine();
         string summary = deletedCount > 0

@@ -17,6 +17,7 @@ public sealed class RebuildCommand : ICommand
     {
         Console.WriteLine($"[Rebuild] Project: {options.ProjectPath}");
 
+        _cleanCommand.FullClean = true;
         var cleanResult = _cleanCommand.Execute(options);
         if (!cleanResult.Success)
         {
