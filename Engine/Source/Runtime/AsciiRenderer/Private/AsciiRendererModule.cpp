@@ -64,6 +64,20 @@ private:
 	/// Create and initialize the rendering backend (Auto/Classic/VT).
 	void createBackend(EAsciiRenderBackendType type, void* consoleOutputHandle);
 
+	/// Flip world Y (Y-up) to screen Y (Y-down) for single-cell commands.
+	int32_t flipY(int32_t worldY) const
+	{
+		return m_backBuffer ? (m_backBuffer->GetHeight() - 1 - worldY) : worldY;
+	}
+
+	/// Flip world Y for multi-row commands (height > 1).
+	/// In Y-up convention, (x, y) is the bottom-left; this converts to
+	/// screen-space top-left for the rasterizer.
+	int32_t flipY(int32_t worldY, int32_t height) const
+	{
+		return m_backBuffer ? (m_backBuffer->GetHeight() - worldY - height) : worldY;
+	}
+
 	FGenericWindow*                       m_renderTarget = nullptr;
 	std::unique_ptr<FAsciiBackBuffer>     m_backBuffer;
 	std::unique_ptr<FRasterizer>          m_rasterizer;
@@ -253,6 +267,13 @@ void FAsciiRendererModule::EndFrame()
 void FAsciiRendererModule::SetActiveView(const FSceneView& view)
 {
 	m_activeView = view;
+
+	// Convert camera Y from world-space (Y-up) to screen-space (Y-down).
+	// In Y-up: camera moving up (+Y) should shift objects down on screen.
+	// The rasterizer subtracts camera position, so negating Y achieves this.
+	auto translation = m_activeView.ViewTransform.GetTranslation();
+	translation.Y = -translation.Y;
+	m_activeView.ViewTransform.SetTranslation(translation);
 }
 
 int32_t FAsciiRendererModule::GetFrameBufferWidth() const
@@ -267,6 +288,10 @@ int32_t FAsciiRendererModule::GetFrameBufferHeight() const
 
 // ---------------------------------------------------------------
 // IAsciiRendererModule - Draw commands
+//
+// Public API uses Y-up world coordinates (right=+X, up=+Y).
+// Internally, the rasterizer uses screen coordinates (Y-down).
+// Each draw method flips Y before submitting to the rasterizer.
 // ---------------------------------------------------------------
 void FAsciiRendererModule::DrawCell(
 	int32_t worldX, int32_t worldY, int32_t zOrder, FAsciiCell cell)
@@ -276,7 +301,7 @@ void FAsciiRendererModule::DrawCell(
 	FDrawCommand cmd;
 	cmd.Type = EDrawCommandType::Cell;
 	cmd.WorldX = worldX;
-	cmd.WorldY = worldY;
+	cmd.WorldY = flipY(worldY);
 	cmd.ZOrder = zOrder;
 	cmd.BlendState = m_blendState;
 	cmd.Cell = cell;
@@ -292,7 +317,7 @@ void FAsciiRendererModule::DrawSprite(
 	FDrawCommand cmd;
 	cmd.Type = EDrawCommandType::Sprite;
 	cmd.WorldX = worldX;
-	cmd.WorldY = worldY;
+	cmd.WorldY = flipY(worldY, sprite.Height);
 	cmd.ZOrder = zOrder;
 	cmd.BlendState = m_blendState;
 	cmd.Sprite = &sprite;
@@ -308,7 +333,7 @@ void FAsciiRendererModule::DrawText(
 	FDrawCommand cmd;
 	cmd.Type = EDrawCommandType::Text;
 	cmd.WorldX = worldX;
-	cmd.WorldY = worldY;
+	cmd.WorldY = flipY(worldY);
 	cmd.ZOrder = zOrder;
 	cmd.BlendState = m_blendState;
 	cmd.Text = text;
@@ -326,7 +351,7 @@ void FAsciiRendererModule::FillRect(
 	FDrawCommand cmd;
 	cmd.Type = EDrawCommandType::FillRect;
 	cmd.WorldX = worldX;
-	cmd.WorldY = worldY;
+	cmd.WorldY = flipY(worldY, height);
 	cmd.ZOrder = zOrder;
 	cmd.BlendState = m_blendState;
 	cmd.Cell = cell;
@@ -344,7 +369,7 @@ void FAsciiRendererModule::DrawBox(
 	FDrawCommand cmd;
 	cmd.Type = EDrawCommandType::DrawBox;
 	cmd.WorldX = worldX;
-	cmd.WorldY = worldY;
+	cmd.WorldY = flipY(worldY, height);
 	cmd.ZOrder = zOrder;
 	cmd.BlendState = m_blendState;
 	cmd.Fg = fg;
