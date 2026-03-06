@@ -67,6 +67,11 @@ public:
     /// Used at startup to discover game/plugin module DLLs.
     void LoadModulesFromDirectory(const std::string& directory);
 
+    /// Load all DLLs from the given directory into the process
+    /// WITHOUT initializing modules. Use with LoadAllRegisteredModules()
+    /// for two-phase loading when cross-directory DLL dependencies exist.
+    void ScanDllsFromDirectory(const std::string& directory);
+
     /// Unload a single module by name.
     /// Calls ShutdownModule(), destroys the module object, frees the DLL.
     /// Returns true if the module was found and unloaded.

@@ -73,6 +73,29 @@ void FModuleManager::AddDllSearchPath(const std::string& path)
 {
     std::lock_guard<std::mutex> lock(Mutex);
     DllSearchPaths.push_back(path);
+
+#ifdef _WIN32
+    // Register with Windows so LoadLibrary can resolve dependent DLLs
+    // across directories (e.g. game DLL depending on plugin DLL in
+    // a different Binaries/ folder).
+    static bool bDefaultDirsSet = false;
+    if (!bDefaultDirsSet)
+    {
+        // Enable user-added directories in the default DLL search order.
+        // LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = APPLICATION_DIR | SYSTEM32 | USER_DIRS
+        ::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        bDefaultDirsSet = true;
+    }
+
+    // Convert to wide string for AddDllDirectoryW
+    int wlen = ::MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+    if (wlen > 0)
+    {
+        std::wstring wpath(wlen - 1, L'\0');
+        ::MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), wlen);
+        ::AddDllDirectory(wpath.c_str());
+    }
+#endif
 }
 
 // ---------------------------------------------------------------
@@ -197,13 +220,13 @@ void FModuleManager::LoadAllRegisteredModules()
 }
 
 // ---------------------------------------------------------------
-// LoadModulesFromDirectory
+// ScanDllsFromDirectory
 // ---------------------------------------------------------------
-void FModuleManager::LoadModulesFromDirectory(const std::string& directory)
+void FModuleManager::ScanDllsFromDirectory(const std::string& directory)
 {
-    // Phase 1: Load all DLLs from the directory into the process.
-    //          This triggers static FModuleInitializerEntry registration.
-    std::vector<void*> loadedHandles;
+    // Load all DLLs from the directory into the process.
+    // This triggers static FModuleInitializerEntry registration
+    // but does NOT call StartupModule / initialize modules.
 
 #ifdef _WIN32
     std::string pattern = directory;
@@ -222,11 +245,7 @@ void FModuleManager::LoadModulesFromDirectory(const std::string& directory)
                 fullPath += '\\';
             fullPath += fd.cFileName;
 
-            void* handle = PlatformLoadDll(fullPath.c_str());
-            if (handle)
-            {
-                loadedHandles.push_back(handle);
-            }
+            PlatformLoadDll(fullPath.c_str());
         } while (::FindNextFileA(hFind, &fd));
         ::FindClose(hFind);
     }
@@ -234,11 +253,20 @@ void FModuleManager::LoadModulesFromDirectory(const std::string& directory)
     // POSIX: use opendir/readdir
     // (not implemented yet -- game modules on Linux/Mac would need this)
 #endif
+}
+
+// ---------------------------------------------------------------
+// LoadModulesFromDirectory
+// ---------------------------------------------------------------
+void FModuleManager::LoadModulesFromDirectory(const std::string& directory)
+{
+    // Phase 1: Load all DLLs (triggers static registration).
+    ScanDllsFromDirectory(directory);
 
     // Phase 2: Initialize all newly registered modules.
     LoadAllRegisteredModules();
 
-    // Note: DLL handles from loadedHandles are intentionally NOT freed here.
+    // Note: DLL handles are intentionally NOT freed here.
     // The modules remain loaded for the lifetime of the process.
     // UnloadAllModules() will handle cleanup for modules tracked by FModuleInfo.
     // For DLLs loaded here but not claimed by any module entry, they stay loaded

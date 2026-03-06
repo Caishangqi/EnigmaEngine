@@ -23,12 +23,4 @@ namespace Enigma
 // ---------------------------------------------------------------
 LAUNCH_API int32_t GuardedMain(const char* cmdLine);
 
-// ---------------------------------------------------------------
-// IsEngineExitRequested -- global exit query
-//
-// Convenience function that checks GEngineLoop.IsExitRequested().
-// Can be called from anywhere to test if shutdown was requested.
-// ---------------------------------------------------------------
-LAUNCH_API bool IsEngineExitRequested();
-
 } // namespace Enigma

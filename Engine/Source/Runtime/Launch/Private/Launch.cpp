@@ -2,6 +2,7 @@
 
 #include "Launch.h"
 #include "LaunchEngineLoop.h"
+#include "CoreGlobals.h"
 
 #include <cstdio>
 
@@ -12,14 +13,6 @@ namespace Enigma
 // Global FEngineLoop instance
 // ---------------------------------------------------------------
 LAUNCH_API FEngineLoop GEngineLoop;
-
-// ---------------------------------------------------------------
-// IsEngineExitRequested
-// ---------------------------------------------------------------
-bool IsEngineExitRequested()
-{
-    return GEngineLoop.IsExitRequested();
-}
 
 // ---------------------------------------------------------------
 // GuardedMain
@@ -47,7 +40,7 @@ int32_t GuardedMain(const char* cmdLine)
 
     // ---- Phase 3: Main loop ----
     std::printf("[GuardedMain] Entering main loop\n");
-    while (!GEngineLoop.IsExitRequested())
+    while (!IsEngineExitRequested())
     {
         GEngineLoop.Tick();
     }

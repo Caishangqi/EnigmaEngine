@@ -72,9 +72,9 @@ public:
     float GetDeltaTime() const { return DeltaTime; }
     int64_t GetFrameNumber() const { return FrameNumber; }
 
-    /// Request engine exit (Tick loop will stop).
-    void RequestExit() { bExitRequested = true; }
-    bool IsExitRequested() const { return bExitRequested; }
+    /// Request engine exit (delegates to Core's RequestEngineExit).
+    void RequestExit();
+    bool IsExitRequested() const;
 
 private:
     /// Load all modules registered for the given phase.
@@ -91,7 +91,6 @@ private:
 
     // State
     bool bIsRunning     = false;
-    bool bExitRequested = false;
 };
 
 } // namespace Enigma

@@ -21,6 +21,19 @@ namespace Enigma
 {
 
 // ---------------------------------------------------------------
+// RequestExit / IsExitRequested -- delegate to Core globals
+// ---------------------------------------------------------------
+void FEngineLoop::RequestExit()
+{
+    RequestEngineExit("FEngineLoop::RequestExit");
+}
+
+bool FEngineLoop::IsExitRequested() const
+{
+    return IsEngineExitRequested();
+}
+
+// ---------------------------------------------------------------
 // Module phase registration
 // ---------------------------------------------------------------
 void FEngineLoop::AddModuleToPhase(ELoadingPhase phase, const std::string& moduleName)
@@ -254,9 +267,10 @@ int32_t FEngineLoop::Init()
 
     // Auto-discover and load all module DLLs from the executable directory
     // and registered DLL search paths (game/plugin directories).
-    // This loads game module DLLs that aren't implicitly linked to the EXE,
-    // triggers their FModuleInitializerEntry registration, then calls
-    // StartupModule() on each newly discovered module.
+    //
+    // Two-phase approach: scan ALL directories for DLLs first, then
+    // initialize modules. This ensures cross-directory DLL dependencies
+    // are resolved (e.g. game module depends on plugin DLL).
     {
         std::string binDir;
 #ifdef _WIN32
@@ -271,17 +285,20 @@ int32_t FEngineLoop::Init()
 #endif
         if (!binDir.empty())
         {
-            // Load engine DLLs from EXE directory
-            FModuleManager::Get().LoadModulesFromDirectory(binDir);
+            // Phase 1: Scan all directories -- load DLLs into process
+            //          (triggers static FModuleInitializerEntry registration)
+            FModuleManager::Get().ScanDllsFromDirectory(binDir);
 
-            // Load game/plugin DLLs from registered search paths
             for (const auto& searchPath : FModuleManager::Get().GetDllSearchPaths())
             {
                 if (searchPath != binDir)
                 {
-                    FModuleManager::Get().LoadModulesFromDirectory(searchPath);
+                    FModuleManager::Get().ScanDllsFromDirectory(searchPath);
                 }
             }
+
+            // Phase 2: Initialize all newly registered modules
+            FModuleManager::Get().LoadAllRegisteredModules();
         }
         else
         {
