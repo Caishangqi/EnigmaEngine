@@ -66,6 +66,12 @@ public static class PostBuildStep
             if (isMonolithic)
             {
                 Directory.CreateDirectory(gameOutputDir);
+
+                // Clean stale modular artifacts (DLLs, .modules) from previous builds.
+                // Shipping produces a single monolithic EXE — any DLLs in the output
+                // directory are leftovers from earlier modular (DebugGame/Development) builds.
+                CleanStaleModularArtifacts(gameOutputDir);
+
                 copied = CopyMonolithicBinaries(context.CmakeBuildDir, gameOutputDir);
             }
             else
@@ -255,6 +261,36 @@ public static class PostBuildStep
             }
         }
         return count;
+    }
+
+    /// <summary>
+    /// Remove stale DLLs and .modules manifests from the output directory.
+    /// Called before Shipping (monolithic) builds to ensure no leftover
+    /// artifacts from previous modular builds remain alongside the EXE.
+    /// </summary>
+    private static void CleanStaleModularArtifacts(string outputDir)
+    {
+        int removed = 0;
+        foreach (var pattern in new[] { "*.dll", "*.modules", "*.target" })
+        {
+            foreach (var file in Directory.GetFiles(outputDir, pattern))
+            {
+                try
+                {
+                    File.Delete(file);
+                    Console.WriteLine($"  [Clean] {Path.GetFileName(file)}");
+                    removed++;
+                }
+                catch (IOException ex)
+                {
+                    Console.Error.WriteLine(
+                        $"  [Warning] Could not remove stale {Path.GetFileName(file)}: {ex.Message}");
+                }
+            }
+        }
+
+        if (removed > 0)
+            Console.WriteLine($"[PostBuild] Cleaned {removed} stale modular artifact(s)");
     }
 
     /// <summary>
