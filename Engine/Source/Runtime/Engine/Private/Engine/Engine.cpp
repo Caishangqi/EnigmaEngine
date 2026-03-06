@@ -15,6 +15,7 @@ FEngine* GEngine = nullptr;
 void FEngine::Init(FEngineLoop* /*engineLoop*/)
 {
     std::printf("[FEngine] Init\n");
+    SubsystemCollection.Initialize();
 }
 
 void FEngine::Start()
@@ -26,10 +27,12 @@ void FEngine::Tick(float deltaTime)
 {
     DeltaTime = deltaTime;
     ++TickCount;
+    SubsystemCollection.Tick(deltaTime);
 }
 
 void FEngine::Shutdown()
 {
+    SubsystemCollection.Deinitialize();
     std::printf("[FEngine] Shutdown\n");
 }
 

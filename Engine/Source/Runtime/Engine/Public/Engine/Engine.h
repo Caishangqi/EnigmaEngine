@@ -3,6 +3,7 @@
 #pragma once
 
 #include "EngineAPI.generated.h"
+#include "Subsystems/SubsystemCollection.h"
 
 #include <chrono>
 #include <cstdint>
@@ -40,6 +41,13 @@ public:
     /// Returns the game instance, or nullptr if not a game engine.
     virtual FGameInstance* GetGameInstance() const { return nullptr; }
 
+    /// Retrieve a subsystem by type. Returns nullptr if not found.
+    template <typename T>
+    T* GetSubsystem() const { return SubsystemCollection.GetSubsystem<T>(); }
+
+    /// Get the subsystem collection (for module registration).
+    FSubsystemCollection& GetSubsystemCollection() { return SubsystemCollection; }
+
     float    GetDeltaTime() const { return DeltaTime; }
     int64_t  GetTickCount() const { return TickCount; }
 
@@ -58,6 +66,7 @@ public:
 protected:
     float    DeltaTime  = 0.0f;
     int64_t  TickCount  = 0;
+    mutable FSubsystemCollection SubsystemCollection;
 
 private:
     using Clock = std::chrono::high_resolution_clock;

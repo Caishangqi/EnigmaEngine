@@ -4,6 +4,8 @@
 /// @brief Implementation of FMath non-constexpr functions.
 
 #include "Math/MathUtility.h"
+#include "Math/RandomStream.h"
+#include "Math/Vector.h"
 
 namespace Enigma
 {
@@ -104,6 +106,42 @@ float FMath::ClampAngle(float Angle)
 		Angle += 360.0f;
 	}
 	return Angle;
+}
+
+// -----------------------------------------------------------------
+// Random (global FRandomStream, initialized with non-deterministic seed)
+// -----------------------------------------------------------------
+
+static FRandomStream GlobalRandom;
+
+float FMath::FRand()
+{
+	return GlobalRandom.GetFraction();
+}
+
+int32_t FMath::RandHelper(int32_t A)
+{
+	return GlobalRandom.RandHelper(A);
+}
+
+int32_t FMath::RandRange(int32_t min, int32_t max)
+{
+	return GlobalRandom.RandRange(min, max);
+}
+
+float FMath::FRandRange(float min, float max)
+{
+	return GlobalRandom.FRandRange(min, max);
+}
+
+bool FMath::RandBool()
+{
+	return GlobalRandom.RandBool();
+}
+
+FVector FMath::VRand()
+{
+	return GlobalRandom.GetUnitVector();
 }
 
 } // namespace Enigma

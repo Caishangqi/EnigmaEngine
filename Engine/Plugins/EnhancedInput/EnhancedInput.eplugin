@@ -1,0 +1,13 @@
+{
+    "FileVersion": 1,
+    "FriendlyName": "Enhanced Input",
+    "Description": "Enhanced Input system with actions, mapping contexts, modifiers, and triggers",
+    "Category": "Input",
+    "Modules": [
+        {
+            "Name": "EnhancedInput",
+            "Type": "Runtime",
+            "LoadingPhase": "PostEngineInit"
+        }
+    ]
+}

@@ -250,7 +250,7 @@ public static class CreateProjectCommandTest
 
             var header = File.ReadAllText(
                 Path.Combine(location, "DX12Proj", "Source", "DX12Proj", "Public", "DX12ProjGameInstance.h"));
-            Assert(header.Contains("FGenericWindow"), "BlankDX12 GameInstance should reference FGenericWindow");
+            Assert(header.Contains("FGameInstance"), "BlankDX12 GameInstance should inherit FGameInstance");
 
             Console.WriteLine("  PASSED");
         }
@@ -269,7 +269,7 @@ public static class CreateProjectCommandTest
 
             var source = File.ReadAllText(
                 Path.Combine(location, "AsciiProj", "Source", "AsciiProj", "Private", "AsciiProjGameInstance.cpp"));
-            Assert(source.Contains("EWindowType::Console"), "BlankAscii GameInstance should use EWindowType::Console");
+            Assert(source.Contains("IAsciiRendererModule"), "BlankAscii GameInstance should use IAsciiRendererModule");
 
             var eproject = File.ReadAllText(
                 Path.Combine(location, "AsciiProj", "AsciiProj.eproject"));

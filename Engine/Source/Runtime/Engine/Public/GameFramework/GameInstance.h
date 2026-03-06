@@ -9,6 +9,8 @@
 namespace Enigma
 {
 
+class FInputSubsystem; // forward declaration for SetupInput
+
 // ---------------------------------------------------------------
 // FGameInstance -- user-programmable game instance base class (REQ-013)
 //
@@ -38,6 +40,13 @@ public:
 
     /// Called during engine shutdown, after the last frame.
     virtual void Shutdown();
+
+    /// Called during Init() after input subsystem is available.
+    /// Override to create actions, mapping contexts, and bind callbacks.
+    ///
+    /// UE equivalent: APawn::SetupPlayerInputComponent(UInputComponent*)
+    /// UE binds on Pawn level; we bind on GameInstance level (no Pawn/PlayerController yet).
+    virtual void SetupInput(FInputSubsystem& InputSubsystem) {}
 
     // ----- Per-frame loop (called in order by FGameEngine::Tick) -----
 

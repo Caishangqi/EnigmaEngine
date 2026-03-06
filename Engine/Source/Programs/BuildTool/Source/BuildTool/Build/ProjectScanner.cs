@@ -84,12 +84,26 @@ public static class ProjectScanner
         var gameModules = ScanGameModules(gameSourceDir);
         Console.WriteLine($"  Found {gameModules.Count} game modules");
 
-        // 6. Scan plugins
+        // 6. Scan plugins (project plugins + engine plugins)
         Console.WriteLine("[ProjectScanner] Scanning plugins...");
         string pluginsDir = Path.Combine(projectRoot, "Plugins");
         var pluginScanResult = Directory.Exists(pluginsDir)
             ? PluginScanner.Scan(pluginsDir, projectDescriptor.Plugins)
             : new PluginScanner.ScanResult();
+
+        // Also scan engine plugins (Engine/Plugins/)
+        string enginePluginsDir = Path.Combine(engineRoot, "Plugins");
+        if (Directory.Exists(enginePluginsDir))
+        {
+            var enginePluginResult = PluginScanner.Scan(enginePluginsDir, projectDescriptor.Plugins);
+            foreach (var (k, v) in enginePluginResult.Modules)
+                pluginScanResult.Modules[k] = v;
+            foreach (var (k, v) in enginePluginResult.EnabledPlugins)
+                pluginScanResult.EnabledPlugins[k] = v;
+            foreach (var name in enginePluginResult.DisabledPlugins)
+                pluginScanResult.DisabledPlugins.Add(name);
+        }
+
         Console.WriteLine($"  Found {pluginScanResult.Modules.Count} plugin modules");
 
         // 7. Scan third-party modules

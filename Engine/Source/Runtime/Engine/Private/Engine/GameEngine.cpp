@@ -44,6 +44,25 @@ void FGameEngine::Init(FEngineLoop* engineLoop)
     if (GameInstance)
     {
         GameInstance->Init();
+
+        // Call SetupInput if an input subsystem is registered.
+        // Uses ISubsystem interface to avoid linking against EnhancedInput.
+        ISubsystem* inputSubsystem = nullptr;
+        SubsystemCollection.ForEachSubsystem([&](ISubsystem* s)
+        {
+            if (std::string(s->GetName()) == "FInputSubsystem")
+            {
+                inputSubsystem = s;
+            }
+        });
+        if (inputSubsystem)
+        {
+            // Cast through void* to avoid #include of InputSubsystem.h.
+            // FGameInstance::SetupInput takes FInputSubsystem& - the actual type
+            // is guaranteed by the name check above.
+            GameInstance->SetupInput(
+                *reinterpret_cast<FInputSubsystem*>(inputSubsystem));
+        }
     }
 
     // Create game window from config

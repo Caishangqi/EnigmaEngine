@@ -18,6 +18,10 @@
         {
             "Name": "ArcadeFeature",
             "Enabled": true
+        },
+        {
+            "Name": "EnhancedInput",
+            "Enabled": true
         }
     ]
 }

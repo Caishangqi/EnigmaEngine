@@ -9,10 +9,13 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 
 namespace Enigma
 {
+
+struct FVector;
 
 /// @brief Centralized math constants and static utility functions.
 ///
@@ -185,6 +188,28 @@ struct CORE_API FMath
 
 	/// @brief Normalize angle to [0, 360) range (degrees).
 	static float ClampAngle(float Angle);
+
+	// -----------------------------------------------------------------
+	// Random (backed by internal global FRandomStream)
+	// -----------------------------------------------------------------
+
+	/// @brief Random float in [0, 1).
+	static float FRand();
+
+	/// @brief Random int in [0, A). Returns 0 if A <= 0.
+	static int32_t RandHelper(int32_t A);
+
+	/// @brief Random int in [min, max] inclusive.
+	static int32_t RandRange(int32_t min, int32_t max);
+
+	/// @brief Random float in [min, max].
+	static float FRandRange(float min, float max);
+
+	/// @brief Random bool (50/50).
+	static bool RandBool();
+
+	/// @brief Random unit vector.
+	static FVector VRand();
 };
 
 } // namespace Enigma

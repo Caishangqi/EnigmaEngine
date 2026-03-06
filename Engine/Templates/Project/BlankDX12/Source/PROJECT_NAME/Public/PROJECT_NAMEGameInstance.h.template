@@ -5,9 +5,9 @@
 #include "GameFramework/GameInstance.h"
 
 /// PROJECT_NAME game instance.
-/// Creates a native window for DirectX 12 rendering.
-/// Override Init() to set up your rendering pipeline,
-/// and Render() to draw each frame.
+/// Uses a native window for DirectX 12 rendering.
+/// The engine creates the window automatically from config
+/// (DefaultEngine.ini). Override Render() to draw each frame.
 class PROJECT_NAME_API FPROJECT_NAMEGameInstance : public Enigma::FGameInstance
 {
 public:
@@ -15,7 +15,4 @@ public:
 	void Update(float DeltaTime) override;
 	void Render() override;
 	void Shutdown() override;
-
-private:
-	Enigma::FGenericWindow* m_mainWindow = nullptr;
 };
