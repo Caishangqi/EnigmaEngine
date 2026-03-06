@@ -18,15 +18,22 @@ EnigmaEngine/
 │   │       └── nlohmann_json/      # header-only JSON 库
 │   ├── Config/                     # 引擎基础配置 (BaseEngine.ini, BaseGame.ini)
 │   ├── Plugins/
-│   │   └── EnhancedInput/          # 增强输入系统插件 (动作、触发器、修饰器、映射上下文)
-│   └── Templates/Project/          # 项目模板 (Default, BlankAscii, BlankDX12)
-├── EnigmaArcade/                   # 示例游戏项目 (与 Engine 同级，IDE 中显示在 Games 虚拟文件夹)
+│   │   └── EnhancedInput/          # 引擎插件: 增强输入系统
+│   │       ├── EnhancedInput.eplugin
+│   │       └── Source/EnhancedInput/  (Public/ + Private/)
+│   └── Templates/                  # 脚手架模板 (Project, Module, Plugin)
+├── EnigmaArcade/                   # 示例游戏项目
+│   ├── EnigmaArcade.eproject       # 项目描述符
 │   ├── Config/                     # 项目配置 (DefaultEngine.ini, DefaultGame.ini)
-│   ├── Plugins/ArcadeFeature/      # 游戏插件
-│   └── Source/
-│       ├── ArcadeGameplay/         # 游戏逻辑模块 (FAsciiGameObject)
-│       └── EnigmaArcade/           # 主游戏模块
-└── Tests/                           # C++ 单元测试 (googletest)
+│   ├── Source/
+│   │   ├── ArcadeGameplay/         # 游戏逻辑模块 (FAsciiGameObject)
+│   │   └── EnigmaArcade/           # 主游戏模块
+│   └── Plugins/
+│       └── ArcadeFeature/          # 游戏插件
+│           ├── ArcadeFeature.eplugin
+│           ├── Config/             # 插件配置 (DefaultArcadeFeature.ini)
+│           └── Source/ArcadeFeature/  (Public/ + Private/)
+└── Tests/                           # C++ 单元测试 + 集成测试
 ```
 
 ## 代码风格

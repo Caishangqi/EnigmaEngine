@@ -140,29 +140,53 @@ The EXE locates game DLLs at runtime via `--project-dir=` command line argument 
 ```
 EnigmaEngine/
   Engine/
-    Binaries/Win64/         Engine DLLs + EXE (Modular builds)
-    Config/                 Engine base config (BaseEngine.ini, BaseGame.ini)
-    Intermediate/           Engine build intermediates + generated .vcxproj files
-    Source/Runtime/         Runtime modules (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
-    Source/ThirdParty/      Third-party libraries (nlohmann_json, googletest)
-    Source/Programs/        Build tools (BuildTool)
-    Plugins/                Engine plugins (EnhancedInput)
-    Templates/              Project / Module / Plugin code templates
-  EnigmaArcade/             Example game project
-    Binaries/Win64/         Game DLLs (Modular) or monolithic EXE (Shipping)
-    Config/                 Project config (DefaultEngine.ini, DefaultGame.ini)
-    Intermediate/           Project build intermediates + generated .vcxproj files
-    Source/                 Game module sources
-    Plugins/                Game plugins (each with own Binaries/ and Intermediate/)
+    Binaries/Win64/              Engine DLLs + EXE (Modular builds)
+    Config/                      Engine base config (BaseEngine.ini, BaseGame.ini)
+    Intermediate/                Engine build intermediates + generated .vcxproj files
+    Source/
+      Runtime/                   Runtime modules
+        Core/                      Foundation: module system, logging, math, delegates, config
+        ApplicationCore/           Platform application & window abstraction (Win32)
+        RenderCore/                Renderer interface abstraction (IRendererModule)
+        AsciiRenderer/             ASCII frame-buffer renderer with Z-depth & scene camera
+        Engine/                    Engine loop, GameEngine, GameInstance, SubsystemCollection
+        Launch/                    Entry point (GuardedMain, main/WinMain)
+      ThirdParty/                Third-party libraries (nlohmann_json, googletest)
+      Programs/
+        BuildTool/               C# .NET 9 CLI build tool
+    Plugins/
+      EnhancedInput/             Engine plugin: action-based input system
+        EnhancedInput.eplugin      Plugin descriptor
+        Source/EnhancedInput/      Module source (Public/ + Private/)
+        Binaries/                  Plugin DLLs (Modular builds)
+    Templates/                   Scaffolding templates (Project, Module, Plugin)
+  EnigmaArcade/                  Example game project
+    EnigmaArcade.eproject        Project descriptor
+    Config/                      Project config (DefaultEngine.ini, DefaultGame.ini)
+    Source/
+      ArcadeGameplay/            Game logic module (FAsciiGameObject)
+      EnigmaArcade/              Main game module
+    Plugins/
+      ArcadeFeature/             Game plugin
+        ArcadeFeature.eplugin      Plugin descriptor
+        Config/                    Plugin config (DefaultArcadeFeature.ini)
+        Source/ArcadeFeature/      Module source (Public/ + Private/)
+    Binaries/Win64/              Game DLLs (Modular) or monolithic EXE (Shipping)
+    Intermediate/                Build intermediates + generated .vcxproj files
   Tests/
-    Core.Math.Tests/        Core math unit tests (GoogleTest, 284 tests)
-    Core.Delegates.Tests/   Delegate system unit tests (GoogleTest, 37 tests)
-    Core.Config.Tests/      Config system unit tests (GoogleTest)
-    ApplicationCore.Tests/  ApplicationCore integration tests (GoogleTest, 20 tests)
-    RenderCore.Tests/       RenderCore module tests (GoogleTest)
-    AsciiRenderer.Tests/    AsciiRenderer module tests (GoogleTest)
-    Engine.Tests/           Engine module tests (GoogleTest)
-    EnhancedInput.Tests/    Enhanced Input system tests (GoogleTest)
+    Core.Math.Tests/             Core math unit tests (GoogleTest, 284+ tests)
+    Core.Delegates.Tests/        Delegate system unit tests (GoogleTest, 37 tests)
+    Core.Config.Tests/           Config system unit tests (GoogleTest)
+    ApplicationCore.Tests/       Window & message pump tests (GoogleTest, 20 tests)
+    RenderCore.Tests/            RenderCore module tests (GoogleTest)
+    AsciiRenderer.Tests/         AsciiRenderer module tests (GoogleTest)
+    Engine.Tests/                Engine module tests (GoogleTest)
+    EnhancedInput.Tests/         Enhanced Input system tests (GoogleTest)
+    DllExportMacroTest/          DLL export macro validation
+    ModuleInterfaceTest/         Module interface integration test
+    ModuleManagerTest/           Module manager integration test
+    LaunchModuleTest/            Launch module integration test
+    NlohmannJsonTest/            nlohmann_json integration test
 ```
 
 <p>&nbsp;

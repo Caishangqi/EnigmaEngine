@@ -140,29 +140,53 @@ EXE 通过 `--project-dir=` 命令行参数在运行时定位游戏 DLL（VS 调
 ```
 EnigmaEngine/
   Engine/
-    Binaries/Win64/         引擎 DLL + EXE（模块化构建）
-    Config/                 引擎基础配置 (BaseEngine.ini, BaseGame.ini)
-    Intermediate/           引擎构建中间文件 + 生成的 .vcxproj 文件
-    Source/Runtime/         引擎运行时模块 (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
-    Source/ThirdParty/      第三方库 (nlohmann_json, googletest)
-    Source/Programs/        构建工具 (BuildTool)
-    Plugins/                引擎插件 (EnhancedInput)
-    Templates/              项目/模块/插件代码模板
-  EnigmaArcade/             示例游戏项目
-    Binaries/Win64/         游戏 DLL（模块化）或单体 EXE（Shipping）
-    Config/                 项目配置 (DefaultEngine.ini, DefaultGame.ini)
-    Intermediate/           项目构建中间文件 + 生成的 .vcxproj 文件
-    Source/                 游戏模块源码
-    Plugins/                游戏插件（各自拥有独立的 Binaries/ 和 Intermediate/）
+    Binaries/Win64/              引擎 DLL + EXE（模块化构建）
+    Config/                      引擎基础配置 (BaseEngine.ini, BaseGame.ini)
+    Intermediate/                引擎构建中间文件 + 生成的 .vcxproj 文件
+    Source/
+      Runtime/                   引擎运行时模块
+        Core/                      基础模块：模块系统、日志、数学库、委托、配置
+        ApplicationCore/           平台应用程序与窗口抽象 (Win32)
+        RenderCore/                渲染器接口抽象层 (IRendererModule)
+        AsciiRenderer/             ASCII 帧缓冲渲染器，Z 深度排序、场景视图摄像机
+        Engine/                    引擎循环、GameEngine、GameInstance、SubsystemCollection
+        Launch/                    入口点 (GuardedMain, main/WinMain)
+      ThirdParty/                第三方库 (nlohmann_json, googletest)
+      Programs/
+        BuildTool/               C# .NET 9 命令行构建工具
+    Plugins/
+      EnhancedInput/             引擎插件：基于动作的输入系统
+        EnhancedInput.eplugin      插件描述符
+        Source/EnhancedInput/      模块源码 (Public/ + Private/)
+        Binaries/                  插件 DLL（模块化构建）
+    Templates/                   脚手架模板（项目、模块、插件）
+  EnigmaArcade/                  示例游戏项目
+    EnigmaArcade.eproject        项目描述符
+    Config/                      项目配置 (DefaultEngine.ini, DefaultGame.ini)
+    Source/
+      ArcadeGameplay/            游戏逻辑模块 (FAsciiGameObject)
+      EnigmaArcade/              主游戏模块
+    Plugins/
+      ArcadeFeature/             游戏插件
+        ArcadeFeature.eplugin      插件描述符
+        Config/                    插件配置 (DefaultArcadeFeature.ini)
+        Source/ArcadeFeature/      模块源码 (Public/ + Private/)
+    Binaries/Win64/              游戏 DLL（模块化）或单体 EXE（Shipping）
+    Intermediate/                构建中间文件 + 生成的 .vcxproj 文件
   Tests/
-    Core.Math.Tests/        Core 数学库单元测试 (GoogleTest, 284 个测试)
-    Core.Delegates.Tests/   委托系统单元测试 (GoogleTest, 37 个测试)
-    Core.Config.Tests/      配置系统单元测试 (GoogleTest)
-    ApplicationCore.Tests/  ApplicationCore 集成测试 (GoogleTest, 20 个测试)
-    RenderCore.Tests/       RenderCore 模块测试 (GoogleTest)
-    AsciiRenderer.Tests/    AsciiRenderer 模块测试 (GoogleTest)
-    Engine.Tests/           Engine 模块测试 (GoogleTest)
-    EnhancedInput.Tests/    增强输入系统测试 (GoogleTest)
+    Core.Math.Tests/             Core 数学库单元测试 (GoogleTest, 284+ 个测试)
+    Core.Delegates.Tests/        委托系统单元测试 (GoogleTest, 37 个测试)
+    Core.Config.Tests/           配置系统单元测试 (GoogleTest)
+    ApplicationCore.Tests/       窗口与消息泵测试 (GoogleTest, 20 个测试)
+    RenderCore.Tests/            RenderCore 模块测试 (GoogleTest)
+    AsciiRenderer.Tests/         AsciiRenderer 模块测试 (GoogleTest)
+    Engine.Tests/                Engine 模块测试 (GoogleTest)
+    EnhancedInput.Tests/         增强输入系统测试 (GoogleTest)
+    DllExportMacroTest/          DLL 导出宏验证
+    ModuleInterfaceTest/         模块接口集成测试
+    ModuleManagerTest/           模块管理器集成测试
+    LaunchModuleTest/            Launch 模块集成测试
+    NlohmannJsonTest/            nlohmann_json 集成测试
 ```
 
 <p>&nbsp;
