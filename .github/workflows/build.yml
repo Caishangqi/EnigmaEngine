@@ -12,7 +12,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Stage 1: Build the BuildTool and run unit tests
+  # Stage 1: BuildTool — build, unit tests, scaffolding integration
   # ---------------------------------------------------------------------------
   buildtool:
     name: BuildTool
@@ -67,105 +67,6 @@ jobs:
             exit 1
           }
 
-      - name: Upload BuildTool artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildtool
-          path: Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/
-          retention-days: 1
-
-  # ---------------------------------------------------------------------------
-  # Stage 2: Build the example game project (EnigmaArcade)
-  # ---------------------------------------------------------------------------
-  build-enigma-arcade:
-    name: EnigmaArcade (${{ matrix.config }})
-    needs: buildtool
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [ DebugGame, Development, Shipping ]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Download BuildTool
-        uses: actions/download-artifact@v4
-        with:
-          name: buildtool
-          path: Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/
-
-      - name: Build EnigmaArcade (${{ matrix.config }})
-        shell: pwsh
-        run: |
-          $bt = "Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
-          & $bt clean EnigmaArcade
-          & $bt build EnigmaArcade -c ${{ matrix.config }}
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-
-      - name: Verify build output
-        shell: pwsh
-        run: |
-          $config = "${{ matrix.config }}"
-          $isModular = $config -ne "Shipping"
-
-          if ($isModular) {
-            # Modular: EXE + engine DLLs in Engine/Binaries/Win64, game DLLs in Project/Binaries/Win64
-            $engineBinDir = "Engine/Binaries/Win64"
-            $gameBinDir = "EnigmaArcade/Binaries/Win64"
-
-            if (-not (Test-Path $engineBinDir)) {
-              Write-Host "Engine binaries directory not found: $engineBinDir" -ForegroundColor Red
-              exit 1
-            }
-            $exes = Get-ChildItem -Path $engineBinDir -Filter "*.exe" -ErrorAction SilentlyContinue
-            if ($exes.Count -eq 0) {
-              Write-Host "No executables found in $engineBinDir" -ForegroundColor Red
-              exit 1
-            }
-            $engineDlls = Get-ChildItem -Path $engineBinDir -Filter "*.dll" -ErrorAction SilentlyContinue
-            Write-Host "Engine binaries:" -ForegroundColor Green
-            Get-ChildItem -Path $engineBinDir | ForEach-Object { Write-Host "  $($_.Name)" }
-
-            if (Test-Path $gameBinDir) {
-              Write-Host "Game binaries:" -ForegroundColor Green
-              Get-ChildItem -Path $gameBinDir | ForEach-Object { Write-Host "  $($_.Name)" }
-            }
-          } else {
-            # Shipping: monolithic EXE in Project/Binaries/Win64
-            $binDir = "EnigmaArcade/Binaries/Win64"
-            if (-not (Test-Path $binDir)) {
-              Write-Host "Binaries directory not found: $binDir" -ForegroundColor Red
-              exit 1
-            }
-            $exes = Get-ChildItem -Path $binDir -Filter "*.exe" -ErrorAction SilentlyContinue
-            if ($exes.Count -eq 0) {
-              Write-Host "No executables found in $binDir" -ForegroundColor Red
-              exit 1
-            }
-            Write-Host "Build output:" -ForegroundColor Green
-            Get-ChildItem -Path $binDir | ForEach-Object { Write-Host "  $($_.Name)" }
-          }
-
-  # ---------------------------------------------------------------------------
-  # Stage 3: Full scaffolding + build integration test
-  # ---------------------------------------------------------------------------
-  scaffolding-build:
-    name: Scaffolding Build Integration
-    needs: buildtool
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Download BuildTool
-        uses: actions/download-artifact@v4
-        with:
-          name: buildtool
-          path: Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/
-
       - name: Run scaffolding-build-integration test
         shell: pwsh
         run: |
@@ -173,12 +74,20 @@ jobs:
           & $bt test scaffolding-build-integration
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
+      - name: Upload BuildTool artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildtool
+          path: Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/
+          retention-days: 1
+
+  # --- PLACEHOLDER_STAGE2 ---
+
   # ---------------------------------------------------------------------------
-  # Stage 4: C++ Unit Tests
+  # Stage 2: C++ Unit Tests
   # ---------------------------------------------------------------------------
   cpp-unit-tests:
     name: C++ Unit Tests
-    needs: buildtool
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -188,79 +97,74 @@ jobs:
       # -- Core.Math --
       - name: "Core.Math: Configure"
         run: cmake -B build-core-math -S Tests/Core.Math.Tests
-
       - name: "Core.Math: Build"
         run: cmake --build build-core-math --config Release
-
       - name: "Core.Math: Test"
         run: ctest --test-dir build-core-math --output-on-failure -C Release --progress
 
       # -- Core.Delegates --
       - name: "Core.Delegates: Configure"
         run: cmake -B build-core-delegates -S Tests/Core.Delegates.Tests
-
       - name: "Core.Delegates: Build"
         run: cmake --build build-core-delegates --config Release
-
       - name: "Core.Delegates: Test"
         run: ctest --test-dir build-core-delegates --output-on-failure -C Release --progress
 
       # -- Core.Config --
       - name: "Core.Config: Configure"
         run: cmake -B build-core-config -S Tests/Core.Config.Tests
-
       - name: "Core.Config: Build"
         run: cmake --build build-core-config --config Release
-
       - name: "Core.Config: Test"
         run: ctest --test-dir build-core-config --output-on-failure -C Release --progress
 
       # -- ApplicationCore --
       - name: "ApplicationCore: Configure"
         run: cmake -B build-appcore -S Tests/ApplicationCore.Tests
-
       - name: "ApplicationCore: Build"
         run: cmake --build build-appcore --config Release
-
       - name: "ApplicationCore: Test"
         run: ctest --test-dir build-appcore --output-on-failure -C Release --progress
 
       # -- RenderCore --
       - name: "RenderCore: Configure"
         run: cmake -B build-rendercore -S Tests/RenderCore.Tests
-
       - name: "RenderCore: Build"
         run: cmake --build build-rendercore --config Release
-
       - name: "RenderCore: Test"
         run: ctest --test-dir build-rendercore --output-on-failure -C Release --progress
 
       # -- Engine --
       - name: "Engine: Configure"
         run: cmake -B build-engine -S Tests/Engine.Tests
-
       - name: "Engine: Build"
         run: cmake --build build-engine --config Release
-
       - name: "Engine: Test"
         run: ctest --test-dir build-engine --output-on-failure -C Release --progress
 
       # -- AsciiRenderer --
       - name: "AsciiRenderer: Configure"
         run: cmake -B build-ascii-renderer -S Tests/AsciiRenderer.Tests
-
       - name: "AsciiRenderer: Build"
         run: cmake --build build-ascii-renderer --config Release
-
       - name: "AsciiRenderer: Test"
         run: ctest --test-dir build-ascii-renderer --output-on-failure -C Release --progress
 
+      # -- EnhancedInput --
+      - name: "EnhancedInput: Configure"
+        run: cmake -B build-enhanced-input -S Tests/EnhancedInput.Tests
+      - name: "EnhancedInput: Build"
+        run: cmake --build build-enhanced-input --config Release
+      - name: "EnhancedInput: Test"
+        run: ctest --test-dir build-enhanced-input --output-on-failure -C Release --progress
+
+  # --- PLACEHOLDER_STAGE3 ---
+
   # ---------------------------------------------------------------------------
-  # Stage 5: Engine Module Build Validation (standalone infrastructure tests)
+  # Stage 3: Engine Module Build Validation (standalone infrastructure tests)
   # ---------------------------------------------------------------------------
   engine-module-validation:
     name: Engine Module Validation
-    needs: buildtool
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -270,59 +174,49 @@ jobs:
       # -- Core.DllExportMacro --
       - name: "Core.DllExportMacro: Configure"
         run: cmake -B build-dll-export-macro -S Tests/DllExportMacroTest
-
       - name: "Core.DllExportMacro: Build"
         run: cmake --build build-dll-export-macro --config Release
-
       - name: "Core.DllExportMacro: Test"
         run: ctest --test-dir build-dll-export-macro --output-on-failure -C Release
 
       # -- Core.ModuleInterface --
       - name: "Core.ModuleInterface: Configure"
         run: cmake -B build-module-interface -S Tests/ModuleInterfaceTest
-
       - name: "Core.ModuleInterface: Build"
         run: cmake --build build-module-interface --config Release
-
       - name: "Core.ModuleInterface: Test"
         run: ctest --test-dir build-module-interface --output-on-failure -C Release
 
       # -- Core.ModuleManager --
       - name: "Core.ModuleManager: Configure"
         run: cmake -B build-module-manager -S Tests/ModuleManagerTest
-
       - name: "Core.ModuleManager: Build"
         run: cmake --build build-module-manager --config Release
-
       - name: "Core.ModuleManager: Test"
         run: ctest --test-dir build-module-manager --output-on-failure -C Release
 
       # -- Launch.GuardedMain --
       - name: "Launch.GuardedMain: Configure"
         run: cmake -B build-launch-module -S Tests/LaunchModuleTest
-
       - name: "Launch.GuardedMain: Build"
         run: cmake --build build-launch-module --config Release
-
       - name: "Launch.GuardedMain: Test"
         run: ctest --test-dir build-launch-module --output-on-failure -C Release
 
       # -- ThirdParty.NlohmannJson --
       - name: "ThirdParty.NlohmannJson: Configure"
         run: cmake -B build-nlohmann-json -S Tests/NlohmannJsonTest
-
       - name: "ThirdParty.NlohmannJson: Build"
         run: cmake --build build-nlohmann-json --config Release
-
       - name: "ThirdParty.NlohmannJson: Test"
         run: ctest --test-dir build-nlohmann-json --output-on-failure -C Release
 
   # ---------------------------------------------------------------------------
-  # Stage 6: Package EnigmaArcade (Shipping) — runs after all tests pass
+  # Stage 4: Example Project Build — build all configs, package, upload
   # ---------------------------------------------------------------------------
-  package-enigma-arcade:
-    name: Package EnigmaArcade
-    needs: [build-enigma-arcade, scaffolding-build, cpp-unit-tests, engine-module-validation]
+  example-project-build:
+    name: Example Project Build
+    needs: [buildtool, cpp-unit-tests, engine-module-validation]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -335,6 +229,29 @@ jobs:
           name: buildtool
           path: Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/
 
+      - name: Build EnigmaArcade (all configurations)
+        shell: pwsh
+        run: |
+          $bt = "Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
+          foreach ($config in @("DebugGame", "Development", "Shipping")) {
+            Write-Host "--- $config ---" -ForegroundColor Cyan
+            & $bt clean EnigmaArcade
+            & $bt build EnigmaArcade -c $config
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+
+            if ($config -eq "Shipping") {
+              $binDir = "EnigmaArcade/Binaries/Win64"
+            } else {
+              $binDir = "Engine/Binaries/Win64"
+            }
+            $exes = Get-ChildItem -Path $binDir -Filter "*.exe" -ErrorAction SilentlyContinue
+            if ($exes.Count -eq 0) {
+              Write-Host "No executables found in $binDir" -ForegroundColor Red
+              exit 1
+            }
+            Write-Host "$config build verified." -ForegroundColor Green
+          }
+
       - name: Package EnigmaArcade (Shipping)
         shell: pwsh
         run: |
@@ -342,14 +259,7 @@ jobs:
           & $bt package EnigmaArcade -o PackageOutput
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - name: Verify package output
-        shell: pwsh
-        run: |
           $pkgDir = "PackageOutput/Win64"
-          if (-not (Test-Path $pkgDir)) {
-            Write-Host "Package directory not found: $pkgDir" -ForegroundColor Red
-            exit 1
-          }
           $exes = Get-ChildItem -Path $pkgDir -Filter "*.exe" -Recurse
           if ($exes.Count -eq 0) {
             Write-Host "No executables found in package" -ForegroundColor Red
@@ -360,7 +270,7 @@ jobs:
             Write-Host "  $($_.FullName.Replace((Get-Location).Path + '\', ''))"
           }
 
-      - name: Upload packaged game
+      - name: Upload EnigmaArcade package
         uses: actions/upload-artifact@v4
         with:
           name: EnigmaArcade-Win64-Shipping

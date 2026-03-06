@@ -336,8 +336,8 @@ public sealed class CMakeGenerator
         sb.AppendLine($"# ── Module: {name} ──");
         sb.AppendLine();
 
-        // Glob source files
-        sb.AppendLine($"file(GLOB_RECURSE {upperName}_SOURCES");
+        // Glob source files (CONFIGURE_DEPENDS: re-scan at build time when files change)
+        sb.AppendLine($"file(GLOB_RECURSE {upperName}_SOURCES CONFIGURE_DEPENDS");
         sb.AppendLine($"    \"{moduleSourceDir}/*.cpp\"");
         sb.AppendLine($"    \"{moduleSourceDir}/*.h\"");
         sb.AppendLine($"    \"{moduleSourceDir}/*.hpp\"");
