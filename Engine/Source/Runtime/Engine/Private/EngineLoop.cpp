@@ -124,17 +124,25 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
 
     // --- GConfig initialization ---
     // Resolve engine and project config directories from executable location.
-    // Mirrors UE's FPaths approach: fixed relative paths from exe.
     //
-    // Modular (Development/DebugGame/Debug):
-    //   EXE at {Engine}/Binaries/{Platform}/
-    //   Engine config: ../../Config
-    //   Project config: resolved via --project-dir= or ../../../{ProjectName}/Config
+    // Walk-up discovery: starting from the exe directory, walk up the
+    // directory tree looking for known marker files. This is robust
+    // regardless of build directory depth (e.g. Intermediate/Build/
+    // {Config}/Binaries/{CMakeConfig}/).
     //
-    // Shipped (Shipping):
-    //   EXE at {Project}/Binaries/{Platform}/
-    //   Engine config: ../../../Engine/Config
-    //   Project config: ../../Config
+    // Engine root marker:  {dir}/Engine/Config/BaseEngine.ini
+    //                  or: {dir}/Config/BaseEngine.ini  (exe inside Engine/)
+    // Project root marker: {dir}/Config/DefaultEngine.ini
+    //
+    // Shipped layout (StagedBuilds):
+    //   {Root}/Engine/Config/BaseEngine.ini
+    //   {Root}/{GameName}/Config/DefaultEngine.ini
+    //   {Root}/{GameName}/Binaries/{Platform}/{GameExe}
+    //
+    // Development layout (build inside project):
+    //   {EngineRoot}/Engine/Config/BaseEngine.ini
+    //   {ProjectRoot}/Config/DefaultEngine.ini
+    //   {ProjectRoot}/Intermediate/Build/{Config}/Binaries/{CMakeConfig}/{GameExe}
     std::string engineConfigDir;
     std::string projectConfigDir;
     {
@@ -144,30 +152,85 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
         {
             std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
 
-            // Try Modular layout first: EXE in {Engine}/Binaries/{Platform}/
-            // Engine config: ../../Config
-            std::filesystem::path engineCfgModular = exeDir / ".." / ".." / "Config";
-            if (std::filesystem::exists(engineCfgModular))
+            // Walk up from exe directory to find engine and project config.
+            // Stop after a reasonable depth (16 levels) to avoid infinite loops.
+            //
+            // Additionally handles the Shipped root-launcher case where the exe
+            // sits at the package root and the project config is in a sibling
+            // subdirectory: {Root}/{GameName}/Config/DefaultEngine.ini.
+            // The game name is extracted from Engine/Config/StagedBuild_*.ini.
+            std::filesystem::path current = exeDir;
+            for (int depth = 0; depth < 16; ++depth)
             {
-                engineConfigDir = std::filesystem::canonical(engineCfgModular).string();
-            }
-
-            // Fallback: Shipped layout: EXE in {Project}/Binaries/{Platform}/
-            // Engine config: ../../../Engine/Config
-            if (engineConfigDir.empty())
-            {
-                std::filesystem::path engineCfgShipped = exeDir / ".." / ".." / ".." / "Engine" / "Config";
-                if (std::filesystem::exists(engineCfgShipped))
+                // Engine config: {current}/Engine/Config/BaseEngine.ini
+                // (exe is somewhere inside or alongside the engine tree)
+                if (engineConfigDir.empty())
                 {
-                    engineConfigDir = std::filesystem::canonical(engineCfgShipped).string();
-                }
-            }
+                    std::filesystem::path candidate = current / "Engine" / "Config" / "BaseEngine.ini";
+                    if (std::filesystem::exists(candidate))
+                    {
+                        engineConfigDir = std::filesystem::canonical(candidate.parent_path()).string();
 
-            // Project config: try Shipped layout first (../../Config)
-            std::filesystem::path projCfgShipped = exeDir / ".." / ".." / "Config";
-            if (std::filesystem::exists(projCfgShipped))
-            {
-                projectConfigDir = std::filesystem::canonical(projCfgShipped).string();
+                        // Shipped layout: project config is a sibling of Engine/.
+                        // Parse StagedBuild_*.ini to discover the game name, then
+                        // resolve {current}/{GameName}/Config/.
+                        if (projectConfigDir.empty())
+                        {
+                            std::filesystem::path engineCfgDir = candidate.parent_path();
+                            for (const auto& entry : std::filesystem::directory_iterator(engineCfgDir))
+                            {
+                                std::string fname = entry.path().filename().string();
+                                if (fname.starts_with("StagedBuild_") && fname.ends_with(".ini"))
+                                {
+                                    // Extract game name: StagedBuild_{GameName}.ini
+                                    std::string gameName = fname.substr(12, fname.size() - 12 - 4);
+                                    std::filesystem::path projCfg = current / gameName / "Config" / "DefaultEngine.ini";
+                                    if (std::filesystem::exists(projCfg))
+                                    {
+                                        projectConfigDir = std::filesystem::canonical(projCfg.parent_path()).string();
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Engine config: {current}/Config/BaseEngine.ini
+                // (exe is inside the Engine directory itself)
+                if (engineConfigDir.empty())
+                {
+                    std::filesystem::path candidate = current / "Config" / "BaseEngine.ini";
+                    if (std::filesystem::exists(candidate))
+                    {
+                        engineConfigDir = std::filesystem::canonical(candidate.parent_path()).string();
+                    }
+                }
+
+                // Project config: {current}/Config/DefaultEngine.ini
+                // (exe is inside the project directory tree)
+                if (projectConfigDir.empty())
+                {
+                    std::filesystem::path candidate = current / "Config" / "DefaultEngine.ini";
+                    if (std::filesystem::exists(candidate))
+                    {
+                        projectConfigDir = std::filesystem::canonical(candidate.parent_path()).string();
+                    }
+                }
+
+                // Stop early if both found
+                if (!engineConfigDir.empty() && !projectConfigDir.empty())
+                {
+                    break;
+                }
+
+                // Move up one directory
+                std::filesystem::path parent = current.parent_path();
+                if (parent == current)
+                {
+                    break; // Reached filesystem root
+                }
+                current = parent;
             }
         }
 #endif
