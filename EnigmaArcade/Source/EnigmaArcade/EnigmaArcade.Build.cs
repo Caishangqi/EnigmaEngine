@@ -11,8 +11,9 @@ public class EnigmaArcade : ModuleRules
         PublicDependencyModuleNames.Add("Engine");
         PublicDependencyModuleNames.Add("ApplicationCore");
         PublicDependencyModuleNames.Add("RenderCore");
+        PublicDependencyModuleNames.Add("EnhancedInput");
+        PublicDependencyModuleNames.Add("ArcadeGameplay");
 
         PrivateDependencyModuleNames.Add("nlohmann_json");
-        PrivateDependencyModuleNames.Add("ArcadeGameplay");
     }
 }

@@ -5,112 +5,205 @@
 #include "Modules/ModuleManager.h"
 #include "RenderCore/AsciiRendererInterface.h"
 #include "RenderCore/AsciiCell.h"
-#include "SceneView/SceneView.h"
 #include "Math/Color.h"
+#include "Math/Vector.h"
+#include "CoreGlobals.h"
 #include "Logging/LogMacros.h"
 #include "Logging/LogCategory.h"
-#include <nlohmann/json.hpp>
+
+#include <algorithm>
 #include <format>
+#include <string>
 
 DEFINE_LOG_CATEGORY_STATIC(LogArcade, Info, All);
 
-// Simple pseudo-random helpers for the lit-cell demo pattern.
-namespace
-{
-    /// Deterministic char from frame count (visible ASCII range 33-126).
-    char RandomChar(uint64_t seed)
-    {
-        // LCG-style hash for variety.
-        uint64_t h = seed * 6364136223846793005ULL + 1442695040888963407ULL;
-        return static_cast<char>(33 + (h >> 16) % 94);
-    }
-
-    /// Deterministic color from frame count.
-    Enigma::FColor RandomColor(uint64_t seed)
-    {
-        uint64_t h = seed * 2862933555777941757ULL + 3037000493ULL;
-        uint8_t  r = static_cast<uint8_t>((h >> 0) & 0xFF);
-        uint8_t  g = static_cast<uint8_t>((h >> 8) & 0xFF);
-        uint8_t  b = static_cast<uint8_t>((h >> 16) & 0xFF);
-        // Ensure the color is bright enough to be visible.
-        r = static_cast<uint8_t>(128 + r / 2);
-        g = static_cast<uint8_t>(128 + g / 2);
-        b = static_cast<uint8_t>(128 + b / 2);
-        return Enigma::FColor(r, g, b);
-    }
-} // anonymous namespace
-
 void FArcadeGameInstance::Init()
 {
-    Enigma::FGameInstance::Init();
-    TickCount   = 0;
-    m_litColumn = 0;
+	Enigma::FGameInstance::Init();
 
-    // REQ-014: JSON validation -- create and output config using nlohmann/json.
-    nlohmann::json config = {{"game", "EnigmaArcade"}, {"version", 1}};
-    ENIGMA_LOG(LogArcade, Info, "Config: {}", config.dump());
+	// Configure accumulation for multi-key diagonal input
+	m_moveAction.SetAccumulationBehavior(
+		Enigma::EInputActionAccumulationBehavior::Cumulative);
+	m_resizeAction.SetAccumulationBehavior(
+		Enigma::EInputActionAccumulationBehavior::Cumulative);
 
-    ENIGMA_LOG(LogArcade, Info, "Engine Initialized");
+	// Configure modifiers: negateX flips X only, swizzle maps X->Y
+	m_negateX.bX = true;
+	m_negateX.bY = false;
+	m_negateX.bZ = false;
+	m_swizzleYXZ.Order = Enigma::ESwizzleAxis::YXZ;
+
+	// Initial position (Y-up: bottom-left origin)
+	m_player.PosX = 5.0f;
+	m_player.PosY = 5.0f;
+
+	ENIGMA_LOG(LogArcade, Info, "ArcadeGameInstance initialized (Enhanced Input demo)");
+}
+
+void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
+{
+	m_inputSubsystem = &InputSubsystem;
+
+	// ---------------------------------------------------------------
+	// Move Context: WASD with Down trigger (continuous each frame)
+	// Y-up convention: W=+Y (up), S=-Y (down), D=+X (right), A=-X (left)
+	// ---------------------------------------------------------------
+	// D -> +X
+	m_moveContext.MapKey(&m_moveAction, Enigma::EKeys::D)
+		.Triggers.push_back(&m_moveDownTrigger);
+	// A -> -X
+	{
+		auto& m = m_moveContext.MapKey(&m_moveAction, Enigma::EKeys::A);
+		m.Modifiers.push_back(&m_negateX);
+		m.Triggers.push_back(&m_moveDownTrigger);
+	}
+	// W -> +Y (swizzle X->Y)
+	{
+		auto& m = m_moveContext.MapKey(&m_moveAction, Enigma::EKeys::W);
+		m.Modifiers.push_back(&m_swizzleYXZ);
+		m.Triggers.push_back(&m_moveDownTrigger);
+	}
+	// S -> -Y (negate then swizzle)
+	{
+		auto& m = m_moveContext.MapKey(&m_moveAction, Enigma::EKeys::S);
+		m.Modifiers.push_back(&m_negateX);
+		m.Modifiers.push_back(&m_swizzleYXZ);
+		m.Triggers.push_back(&m_moveDownTrigger);
+	}
+	// TAB -> toggle context
+	m_moveContext.MapKey(&m_toggleAction, Enigma::EKeys::Tab)
+		.Triggers.push_back(&m_toggleTrigger);
+	// ESC -> exit
+	m_moveContext.MapKey(&m_exitAction, Enigma::EKeys::Escape)
+		.Triggers.push_back(&m_exitTrigger);
+
+	// ---------------------------------------------------------------
+	// Resize Context: WASD with Pressed trigger (one-shot per press)
+	// ---------------------------------------------------------------
+	m_resizeContext.MapKey(&m_resizeAction, Enigma::EKeys::D)
+		.Triggers.push_back(&m_resizePressedTrigger);
+	{
+		auto& m = m_resizeContext.MapKey(&m_resizeAction, Enigma::EKeys::A);
+		m.Modifiers.push_back(&m_negateX);
+		m.Triggers.push_back(&m_resizePressedTrigger);
+	}
+	{
+		auto& m = m_resizeContext.MapKey(&m_resizeAction, Enigma::EKeys::W);
+		m.Modifiers.push_back(&m_swizzleYXZ);
+		m.Triggers.push_back(&m_resizePressedTrigger);
+	}
+	{
+		auto& m = m_resizeContext.MapKey(&m_resizeAction, Enigma::EKeys::S);
+		m.Modifiers.push_back(&m_negateX);
+		m.Modifiers.push_back(&m_swizzleYXZ);
+		m.Triggers.push_back(&m_resizePressedTrigger);
+	}
+	m_resizeContext.MapKey(&m_toggleAction, Enigma::EKeys::Tab)
+		.Triggers.push_back(&m_toggleTrigger);
+	m_resizeContext.MapKey(&m_exitAction, Enigma::EKeys::Escape)
+		.Triggers.push_back(&m_exitTrigger);
+
+	// ---------------------------------------------------------------
+	// Bind action callbacks
+	// ---------------------------------------------------------------
+
+	// Move: set velocity (applied in Update via FAsciiGameObject)
+	Enigma::FInputActionCallback moveCb;
+	moveCb.Bind([this](const Enigma::FInputActionInstance& inst)
+	{
+		Enigma::FVector v = inst.Value.Get<Enigma::FVector>();
+		m_player.VelX = v.X * m_moveSpeed;
+		m_player.VelY = v.Y * m_moveSpeed;
+	});
+	InputSubsystem.BindAction(&m_moveAction,
+		Enigma::ETriggerEvent::Triggered, std::move(moveCb));
+
+	// Resize: adjust width/height directly (discrete, one-shot)
+	Enigma::FInputActionCallback resizeCb;
+	resizeCb.Bind([this](const Enigma::FInputActionInstance& inst)
+	{
+		Enigma::FVector v = inst.Value.Get<Enigma::FVector>();
+		m_player.Width  += static_cast<int32_t>(v.X);
+		m_player.Height += static_cast<int32_t>(v.Y);
+		m_player.Width  = std::max(m_player.Width, 1);
+		m_player.Height = std::max(m_player.Height, 1);
+	});
+	InputSubsystem.BindAction(&m_resizeAction,
+		Enigma::ETriggerEvent::Triggered, std::move(resizeCb));
+
+	// Toggle: swap mapping contexts
+	Enigma::FInputActionCallback toggleCb;
+	toggleCb.Bind([this](const Enigma::FInputActionInstance&)
+	{
+		m_bMoveMode = !m_bMoveMode;
+		if (m_bMoveMode)
+		{
+			m_inputSubsystem->RemoveMappingContext(&m_resizeContext);
+			m_inputSubsystem->AddMappingContext(&m_moveContext, 0);
+			m_player.Fg = Enigma::FColor::Green;
+		}
+		else
+		{
+			m_inputSubsystem->RemoveMappingContext(&m_moveContext);
+			m_inputSubsystem->AddMappingContext(&m_resizeContext, 0);
+			m_player.Fg = Enigma::FColor::Yellow;
+		}
+		ENIGMA_LOG(LogArcade, Info, "Mode: {}",
+			m_bMoveMode ? "Move" : "Resize");
+	});
+	InputSubsystem.BindAction(&m_toggleAction,
+		Enigma::ETriggerEvent::Triggered, std::move(toggleCb));
+
+	// Exit: request engine shutdown
+	Enigma::FInputActionCallback exitCb;
+	exitCb.Bind([](const Enigma::FInputActionInstance&)
+	{
+		ENIGMA_LOG(LogArcade, Info, "ESC pressed, requesting exit");
+		Enigma::RequestEngineExit("ESC pressed");
+	});
+	InputSubsystem.BindAction(&m_exitAction,
+		Enigma::ETriggerEvent::Triggered, std::move(exitCb));
+
+	// Start with Move context active
+	InputSubsystem.AddMappingContext(&m_moveContext, 0);
+
+	ENIGMA_LOG(LogArcade, Info, "Input setup complete (Move mode)");
 }
 
 void FArcadeGameInstance::Update(float deltaTime)
 {
-    Enigma::FGameInstance::Update(deltaTime);
-    ++TickCount;
+	Enigma::FGameInstance::Update(deltaTime);
 
-    // Advance the lit column each frame (wraps around buffer width).
-    auto& renderer = Enigma::FModuleManager::Get().GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
-    int32_t bufferWidth = renderer.GetFrameBufferWidth();
-    if (bufferWidth > 0)
-    {
-        m_litColumn = static_cast<int32_t>(TickCount % static_cast<uint64_t>(bufferWidth));
-    }
+	// Apply velocity and clamp to buffer bounds
+	m_player.Update(deltaTime);
+
+	auto& renderer = Enigma::FModuleManager::Get()
+		.GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
+	m_player.ClampToBounds(renderer.GetFrameBufferWidth(),
+	                       renderer.GetFrameBufferHeight());
 }
 
 void FArcadeGameInstance::Render()
 {
-    auto& renderer = Enigma::FModuleManager::Get().GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
+	auto& renderer = Enigma::FModuleManager::Get()
+		.GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
 
-    int32_t bufW = renderer.GetFrameBufferWidth();
-    int32_t bufH = renderer.GetFrameBufferHeight();
+	// Draw the player object
+	m_player.Render(renderer, 0);
 
-    // Light up the current column with random chars/colors.
-    // BeginFrame (called by engine) clears the buffer each frame,
-    // so cells from previous frames are already off.
-    for (int32_t y = 1; y < bufH - 1; ++y)
-    {
-        uint64_t       seed = TickCount * 1000 + static_cast<uint64_t>(y);
-        char           ch   = RandomChar(seed);
-        Enigma::FColor fg   = RandomColor(seed);
-        Enigma::FColor bg   = RandomColor(seed);
-        renderer.DrawCell(m_litColumn, y, 0, Enigma::FAsciiCell{ch, Enigma::FColor::Black, bg});
-    }
-
-    // --- Frame counter text overlay (Z=1, on top of lit cells) ---
-    std::string frameText = std::format("Frame: {}", TickCount);
-    renderer.DrawText(0, 0, 1, frameText.c_str(), Enigma::FColor::Yellow, Enigma::FColor::Green);
-
-    // --- Set up FSceneView with camera following the lit cell ---
-    Enigma::FSceneView view;
-    view.ProjectionMode = Enigma::ECameraProjectionMode::Orthographic;
-    view.ViewportX      = 0;
-    view.ViewportY      = 0;
-    view.ViewportWidth  = bufW;
-    view.ViewportHeight = bufH;
-    view.OrthoWidth     = static_cast<float>(bufW);
-    view.OrthoHeight    = static_cast<float>(bufH);
-
-    // Camera follows the lit column: center the view on it.
-    float cameraX                  = static_cast<float>(m_litColumn) - static_cast<float>(bufW) / 2.0f;
-    view.ViewTransform.Translation = Enigma::FVector(cameraX, 0.0f, 0.0f);
-    renderer.SetActiveView(view);
-
-    // Diagnostics via ENIGMA_LOG (separate from rendered frame).
-    ENIGMA_LOG(LogArcade, Info, "Frame: {}, LitColumn: {}", TickCount, m_litColumn);
+	// Status text at top of screen (Y-up: bufH-1 is the top row)
+	int32_t topY = renderer.GetFrameBufferHeight() - 1;
+	const char* mode = m_bMoveMode ? "MOVE" : "RESIZE";
+	int32_t rx = static_cast<int32_t>(std::round(m_player.PosX));
+	int32_t ry = static_cast<int32_t>(std::round(m_player.PosY));
+	std::string status = std::format("[{}] pos({},{}) size({}x{}) TAB=toggle ESC=quit",
+		mode, rx, ry, m_player.Width, m_player.Height);
+	renderer.DrawText(0, topY, 1, status.c_str(),
+		Enigma::FColor::White, Enigma::FColor::Blue);
 }
 
 void FArcadeGameInstance::Shutdown()
 {
-    ENIGMA_LOG(LogArcade, Info, "Game Loop Ended (total ticks: {})", TickCount);
-    Enigma::FGameInstance::Shutdown();
+	ENIGMA_LOG(LogArcade, Info, "ArcadeGameInstance shutdown");
+	Enigma::FGameInstance::Shutdown();
 }

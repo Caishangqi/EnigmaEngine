@@ -9,5 +9,6 @@ public class ArcadeGameplay : ModuleRules
 
         PublicDependencyModuleNames.Add("Core");
         PublicDependencyModuleNames.Add("Engine");
+        PublicDependencyModuleNames.Add("RenderCore");
     }
 }
