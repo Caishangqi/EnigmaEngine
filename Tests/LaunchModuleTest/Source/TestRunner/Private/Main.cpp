@@ -24,6 +24,7 @@
 
 #include "Launch.h"
 #include "LaunchEngineLoop.h"
+#include "CoreGlobals.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 

@@ -159,6 +159,7 @@ add_library(Engine SHARED
     "${ENGINE_PRIVATE}/Engine/GameEngine.cpp"
     "${ENGINE_PRIVATE}/Engine/EngineDelegates.cpp"
     "${ENGINE_PRIVATE}/GameFramework/GameInstance.cpp"
+    "${ENGINE_PRIVATE}/Subsystems/SubsystemCollection.cpp"
     "${ENGINE_PRIVATE}/EngineLoop.cpp"
     "${ENGINE_PRIVATE}/EngineModule.cpp"
     "${ENGINE_PRIVATE}/EngineGlobals.cpp"
