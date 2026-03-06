@@ -28,7 +28,9 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - Unreal-style API: familiar naming conventions and architectural patterns (ModuleRules, TargetRules, GameInstance)
 - Core math library: FVector, FMatrix, FQuat, FRotator, FTransform and more, right-hand Y-up coordinate system, constexpr-friendly
 - Delegate & event system: type-safe TDelegate, TMulticastDelegate with FDelegateHandle lifecycle management, supports static/lambda/member function bindings
-- ASCII renderer: frame-buffer based ASCII art rendering with Z-depth sorting, scene view camera, and VT100 terminal output
+- Engine subsystem framework: extensible SubsystemCollection with automatic lifecycle management, similar to UE's subsystem architecture
+- Enhanced Input system: action-based input with triggers (Pressed/Released/Down), modifiers (Negate/Swizzle/DeadZone/Scalar), and mapping contexts with priority support
+- ASCII renderer: frame-buffer based ASCII art rendering with Z-depth sorting, scene view camera, Y-up coordinate convention, and VT100 terminal output
 
 ## Planned Features
 
@@ -122,8 +124,9 @@ The EXE locates game DLLs at runtime via `--project-dir=` command line argument 
 | `Enigma::ApplicationCore` | Platform-agnostic application and window abstraction (FGenericApplication, FGenericWindow, FGenericApplicationMessageHandler) with Win32 implementation | stable |
 | `Enigma::RenderCore` | Renderer interface abstraction layer (IRendererModule) decoupling engine from concrete renderer implementations | stable |
 | `Enigma::AsciiRenderer` | ASCII art renderer with frame-buffer, Z-depth sorting, scene view camera, and VT100 terminal output | stable |
-| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine with config-driven window creation, FGameInstance, and module loading phase management | stable |
+| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine with config-driven window creation, FGameInstance, SubsystemCollection, and module loading phase management | stable |
 | `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
+| `Enigma::EnhancedInput` | Action-based input system with triggers, modifiers, and mapping contexts (engine plugin) | stable |
 
 ## Third Party
 
@@ -143,6 +146,7 @@ EnigmaEngine/
     Source/Runtime/         Runtime modules (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
     Source/ThirdParty/      Third-party libraries (nlohmann_json, googletest)
     Source/Programs/        Build tools (BuildTool)
+    Plugins/                Engine plugins (EnhancedInput)
     Templates/              Project / Module / Plugin code templates
   EnigmaArcade/             Example game project
     Binaries/Win64/         Game DLLs (Modular) or monolithic EXE (Shipping)
@@ -158,6 +162,7 @@ EnigmaEngine/
     RenderCore.Tests/       RenderCore module tests (GoogleTest)
     AsciiRenderer.Tests/    AsciiRenderer module tests (GoogleTest)
     Engine.Tests/           Engine module tests (GoogleTest)
+    EnhancedInput.Tests/    Enhanced Input system tests (GoogleTest)
 ```
 
 <p>&nbsp;

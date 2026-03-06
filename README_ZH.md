@@ -28,7 +28,9 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - Unreal 风格 API：熟悉的命名约定和架构模式（ModuleRules、TargetRules、GameInstance）
 - 核心数学库：FVector、FMatrix、FQuat、FRotator、FTransform 等完整 3D 数学类型，右手 Y-up 坐标系，constexpr 友好
 - 委托与事件系统：类型安全的 TDelegate、TMulticastDelegate，FDelegateHandle 生命周期管理，支持静态/Lambda/成员函数绑定
-- ASCII 渲染器：基于帧缓冲的 ASCII 字符渲染，Z 深度排序、场景视图摄像机、VT100 终端输出
+- 引擎子系统框架：可扩展的 SubsystemCollection，自动生命周期管理，类似 UE 的子系统架构
+- 增强输入系统：基于动作的输入系统，支持触发器（Pressed/Released/Down）、修饰器（Negate/Swizzle/DeadZone/Scalar）和带优先级的映射上下文
+- ASCII 渲染器：基于帧缓冲的 ASCII 字符渲染，Z 深度排序、场景视图摄像机、Y-up 坐标约定、VT100 终端输出
 
 ## 计划中的特性
 
@@ -122,8 +124,9 @@ EXE 通过 `--project-dir=` 命令行参数在运行时定位游戏 DLL（VS 调
 | `Enigma::ApplicationCore` | 平台无关的应用程序和窗口抽象（FGenericApplication、FGenericWindow、FGenericApplicationMessageHandler），含 Win32 实现 | stable |
 | `Enigma::RenderCore` | 渲染器接口抽象层（IRendererModule），将引擎与具体渲染器实现解耦 | stable |
 | `Enigma::AsciiRenderer` | ASCII 字符渲染器，帧缓冲、Z 深度排序、场景视图摄像机、VT100 终端输出 | stable |
-| `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine 配置驱动窗口创建、FGameInstance 游戏实例和模块加载阶段管理 | stable |
+| `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine 配置驱动窗口创建、FGameInstance 游戏实例、SubsystemCollection 子系统集合和模块加载阶段管理 | stable |
 | `Enigma::Launch` | 入口点模块，提供 GuardedMain 守护主函数和平台特定启动逻辑（main / WinMain） | stable |
+| `Enigma::EnhancedInput` | 基于动作的输入系统，支持触发器、修饰器和映射上下文（引擎插件） | stable |
 
 ## 第三方库
 
@@ -143,6 +146,7 @@ EnigmaEngine/
     Source/Runtime/         引擎运行时模块 (Core, ApplicationCore, RenderCore, AsciiRenderer, Engine, Launch)
     Source/ThirdParty/      第三方库 (nlohmann_json, googletest)
     Source/Programs/        构建工具 (BuildTool)
+    Plugins/                引擎插件 (EnhancedInput)
     Templates/              项目/模块/插件代码模板
   EnigmaArcade/             示例游戏项目
     Binaries/Win64/         游戏 DLL（模块化）或单体 EXE（Shipping）
@@ -158,6 +162,7 @@ EnigmaEngine/
     RenderCore.Tests/       RenderCore 模块测试 (GoogleTest)
     AsciiRenderer.Tests/    AsciiRenderer 模块测试 (GoogleTest)
     Engine.Tests/           Engine 模块测试 (GoogleTest)
+    EnhancedInput.Tests/    增强输入系统测试 (GoogleTest)
 ```
 
 <p>&nbsp;
