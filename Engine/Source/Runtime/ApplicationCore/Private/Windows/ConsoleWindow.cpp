@@ -5,6 +5,7 @@
 #include "Misc/AssertionMacros.h"
 
 #include <windows.h>
+#include <cstdio>
 
 namespace Enigma
 {
@@ -44,9 +45,9 @@ FConsoleWindow::FConsoleWindow(const FConsoleWindowSettings& settings)
         "Failed to acquire console input handle");
 
     saveOriginalSettings();
-    applyBufferSize();
-    applyFont();
     applyConsoleMode();
+    applyFont();
+    applyBufferSize();
     applyWindowStyle();
 
     if (m_settings.bRenderFriendly)
@@ -421,6 +422,18 @@ void FConsoleWindow::pumpConsoleInput(FGenericApplicationMessageHandler* handler
 // Private helpers
 // ---------------------------------------------------------------
 
+HWND FConsoleWindow::findTopLevelHwnd() const
+{
+    HWND hwnd = m_consoleHwnd;
+    for (HWND parent = ::GetParent(hwnd);
+         parent != nullptr;
+         parent = ::GetParent(hwnd))
+    {
+        hwnd = parent;
+    }
+    return hwnd;
+}
+
 void FConsoleWindow::saveOriginalSettings()
 {
     // Save output mode
@@ -451,8 +464,8 @@ void FConsoleWindow::saveOriginalSettings()
         *reinterpret_cast<COORD*>(m_originalBufferSize) = csbi.dwSize;
     }
 
-    // Save window style
-    m_originalWindowStyle = ::GetWindowLongA(m_consoleHwnd, GWL_STYLE);
+    // Save window style (from top-level window for third-party terminal compat)
+    m_originalWindowStyle = ::GetWindowLongA(findTopLevelHwnd(), GWL_STYLE);
 }
 
 void FConsoleWindow::restoreOriginalSettings()
@@ -475,9 +488,10 @@ void FConsoleWindow::restoreOriginalSettings()
     ensure(::SetConsoleScreenBufferSize(m_outputHandle,
         *reinterpret_cast<const COORD*>(m_originalBufferSize)));
 
-    // Restore window style
-    ::SetWindowLongA(m_consoleHwnd, GWL_STYLE, m_originalWindowStyle);
-    ::SetWindowPos(m_consoleHwnd, nullptr, 0, 0, 0, 0,
+    // Restore window style (to top-level window for third-party terminal compat)
+    HWND topLevel = findTopLevelHwnd();
+    ::SetWindowLongA(topLevel, GWL_STYLE, m_originalWindowStyle);
+    ::SetWindowPos(topLevel, nullptr, 0, 0, 0, 0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 }
 
@@ -559,6 +573,28 @@ void FConsoleWindow::applyBufferSize()
     windowRect.Right = m_settings.Columns - 1;
     windowRect.Bottom = m_settings.Rows - 1;
     verify(::SetConsoleWindowInfo(m_outputHandle, TRUE, &windowRect));
+
+    // Verify the window size was actually applied.
+    // Third-party terminals (Cmder/ConEmu, Windows Terminal) may ignore
+    // SetConsoleWindowInfo. Fall back to the xterm resize escape sequence
+    // ESC[8;rows;cols t which is widely supported by modern terminals.
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (m_bVirtualTerminalSupported
+        && ::GetConsoleScreenBufferInfo(m_outputHandle, &csbi))
+    {
+        SHORT actualW = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        SHORT actualH = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+        if (actualW != m_settings.Columns || actualH != m_settings.Rows)
+        {
+            char buf[32];
+            int len = std::snprintf(buf, sizeof(buf), "\x1b[8;%d;%dt",
+                static_cast<int>(m_settings.Rows),
+                static_cast<int>(m_settings.Columns));
+            DWORD written = 0;
+            ::WriteConsoleA(m_outputHandle, buf, static_cast<DWORD>(len),
+                &written, nullptr);
+        }
+    }
 }
 
 void FConsoleWindow::applyWindowStyle()
@@ -568,7 +604,9 @@ void FConsoleWindow::applyWindowStyle()
         return;
     }
 
-    LONG style = ::GetWindowLongA(m_consoleHwnd, GWL_STYLE);
+    HWND targetHwnd = findTopLevelHwnd();
+
+    LONG style = ::GetWindowLongA(targetHwnd, GWL_STYLE);
 
     if (!m_settings.bResizable)
     {
@@ -582,8 +620,8 @@ void FConsoleWindow::applyWindowStyle()
         style &= ~WS_HSCROLL;
     }
 
-    ::SetWindowLongA(m_consoleHwnd, GWL_STYLE, style);
-    ::SetWindowPos(m_consoleHwnd, nullptr, 0, 0, 0, 0,
+    ::SetWindowLongA(targetHwnd, GWL_STYLE, style);
+    ::SetWindowPos(targetHwnd, nullptr, 0, 0, 0, 0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 }
 

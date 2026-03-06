@@ -185,6 +185,47 @@ TEST_F(ConsoleWindowCreation, GetHeight_ReturnsRows_NotPixels)
     m_app->DestroyWindow(window);
 }
 
+TEST_F(ConsoleWindowCreation, MakeWindow_AppliesTitleFromDefinition)
+{
+    FWindowDefinition def;
+    def.Type = EWindowType::Console;
+    def.Title = "TestTitle_12345";
+    def.Width = 120;
+    def.Height = 40;
+
+    FGenericWindow* window = m_app->MakeWindow(def);
+    ASSERT_NE(window, nullptr);
+
+    // Verify the console title was applied
+    char titleBuf[256] = {};
+    DWORD len = ::GetConsoleTitleA(titleBuf, sizeof(titleBuf));
+    EXPECT_GT(len, 0u);
+    EXPECT_STREQ(titleBuf, "TestTitle_12345");
+
+    m_app->DestroyWindow(window);
+}
+
+TEST_F(ConsoleWindowCreation, MakeWindow_PassesResizableFlag)
+{
+    // Create a non-resizable console window
+    FWindowDefinition def;
+    def.Type = EWindowType::Console;
+    def.Width = 120;
+    def.Height = 40;
+    def.bIsResizable = false;
+
+    FGenericWindow* window = m_app->MakeWindow(def);
+    ASSERT_NE(window, nullptr);
+
+    auto* consoleWin = dynamic_cast<FConsoleWindow*>(window);
+    ASSERT_NE(consoleWin, nullptr);
+
+    const FConsoleWindowSettings& settings = consoleWin->GetSettings();
+    EXPECT_FALSE(settings.bResizable);
+
+    m_app->DestroyWindow(window);
+}
+
 // ===============================================================
 // Suite 2: ConsoleWindowSettings
 // ===============================================================

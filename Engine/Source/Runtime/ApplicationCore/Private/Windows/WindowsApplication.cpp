@@ -358,13 +358,19 @@ FGenericWindow* FWindowsApplication::MakeWindow(const FWindowDefinition& definit
     if (definition.Type == EWindowType::Console)
     {
         FConsoleWindowSettings settings;
-        settings.Columns = static_cast<int16_t>(definition.Width);
-        settings.Rows    = static_cast<int16_t>(definition.Height);
-        // Console windows are non-resizable by default (FConsoleWindowSettings::bResizable = false).
-        // FWindowDefinition::bIsResizable defaults to true for native windows, which is not
-        // appropriate for console windows, so we intentionally do not copy it here.
+        settings.Columns     = static_cast<int16_t>(definition.Width);
+        settings.Rows        = static_cast<int16_t>(definition.Height);
+        settings.bResizable  = definition.bIsResizable;
 
         auto window = std::make_unique<FConsoleWindow>(settings);
+
+        // Apply title after construction (FConsoleWindowSettings is POD,
+        // title requires the console HWND which exists after construction).
+        if (definition.Title && definition.Title[0] != '\0')
+        {
+            window->SetTitle(definition.Title);
+        }
+
         FGenericWindow* rawPtr = window.get();
         m_windows.push_back(std::move(window));
         return rawPtr;

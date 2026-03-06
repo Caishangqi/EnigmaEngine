@@ -92,6 +92,12 @@ private:
     void saveOriginalSettings();
     void restoreOriginalSettings();
 
+    /// Walk up the parent chain from m_consoleHwnd to find the actual
+    /// top-level window. Third-party terminals (Cmder/ConEmu, Windows
+    /// Terminal) wrap conhost in their own window; style changes must
+    /// target the top-level window to be visible.
+    HWND findTopLevelHwnd() const;
+
     HANDLE m_outputHandle = reinterpret_cast<HANDLE>(static_cast<intptr_t>(-1));
     HANDLE m_inputHandle = reinterpret_cast<HANDLE>(static_cast<intptr_t>(-1));
     HWND m_consoleHwnd = nullptr;

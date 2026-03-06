@@ -89,6 +89,7 @@ private:
 #ifdef _WIN32
 	HANDLE                                m_screenBuffer = INVALID_HANDLE_VALUE;
 	bool                                  m_bOwnConsole = false;
+	bool                                  m_bDedicatedBuffer = false;
 #endif
 };
 
@@ -114,6 +115,7 @@ void FAsciiRendererModule::ShutdownModule()
 		::CloseHandle(m_screenBuffer);
 		m_screenBuffer = INVALID_HANDLE_VALUE;
 	}
+	m_bDedicatedBuffer = false;
 	if (m_bOwnConsole)
 	{
 		::FreeConsole();
@@ -151,22 +153,41 @@ void FAsciiRendererModule::Initialize(FGenericWindow* renderTarget)
 		m_bOwnConsole = true;
 	}
 
-	// Create a dedicated screen buffer for the renderer.
+	SHORT w = static_cast<SHORT>(renderTarget->GetWidth());
+	SHORT h = static_cast<SHORT>(renderTarget->GetHeight());
+
+	// Strategy 1: Dedicated screen buffer (legacy conhost.exe).
+	// Cleanly separates renderer output from stdout/log output.
+	// Windows Terminal does NOT support SetConsoleActiveScreenBuffer,
+	// so this path only succeeds under the legacy console host.
 	m_screenBuffer = ::CreateConsoleScreenBuffer(
 		GENERIC_READ | GENERIC_WRITE,
 		0,        // not shared
 		nullptr,  // default security
 		CONSOLE_TEXTMODE_BUFFER,
 		nullptr);
-	checkf(m_screenBuffer != INVALID_HANDLE_VALUE,
-		"CreateConsoleScreenBuffer failed: {}", ::GetLastError());
 
-	// Size the buffer and visible window to match the render target.
+	if (m_screenBuffer != INVALID_HANDLE_VALUE)
 	{
-		SHORT w = static_cast<SHORT>(renderTarget->GetWidth());
-		SHORT h = static_cast<SHORT>(renderTarget->GetHeight());
+		// Copy the font from the original console buffer so the dedicated
+		// buffer has the same cell size (and therefore physical window size).
+		{
+			HANDLE origOutput = ::CreateFileA("CONOUT$",
+				GENERIC_READ, FILE_SHARE_WRITE,
+				nullptr, OPEN_EXISTING, 0, nullptr);
+			if (origOutput != INVALID_HANDLE_VALUE)
+			{
+				CONSOLE_FONT_INFOEX fontInfo = {};
+				fontInfo.cbSize = sizeof(CONSOLE_FONT_INFOEX);
+				if (::GetCurrentConsoleFontEx(origOutput, FALSE, &fontInfo))
+				{
+					::SetCurrentConsoleFontEx(m_screenBuffer, FALSE, &fontInfo);
+				}
+				::CloseHandle(origOutput);
+			}
+		}
 
-		// Shrink the visible window first (can't set buffer smaller than window).
+		// Size the buffer and visible window to match the render target.
 		SMALL_RECT minWin = { 0, 0, 0, 0 };
 		::SetConsoleWindowInfo(m_screenBuffer, TRUE, &minWin);
 
@@ -176,11 +197,47 @@ void FAsciiRendererModule::Initialize(FGenericWindow* renderTarget)
 		SMALL_RECT winRect = { 0, 0,
 			static_cast<SHORT>(w - 1), static_cast<SHORT>(h - 1) };
 		::SetConsoleWindowInfo(m_screenBuffer, TRUE, &winRect);
+
+		if (::SetConsoleActiveScreenBuffer(m_screenBuffer))
+		{
+			m_bDedicatedBuffer = true;
+		}
+		else
+		{
+			// Windows Terminal - SetConsoleActiveScreenBuffer unsupported.
+			::CloseHandle(m_screenBuffer);
+			m_screenBuffer = INVALID_HANDLE_VALUE;
+		}
 	}
 
-	// Make the renderer's buffer the visible one.
-	// The original stdout buffer stays connected to ENIGMA_LOG via C stdio.
-	::SetConsoleActiveScreenBuffer(m_screenBuffer);
+	// Strategy 2: Fall back to the active console output (Windows Terminal).
+	// Open CONOUT$ directly and redirect stdout/stderr to NUL so that
+	// printf/log output does not corrupt the rendered frame.
+	if (!m_bDedicatedBuffer)
+	{
+		m_screenBuffer = ::CreateFileA("CONOUT$",
+			GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE,
+			nullptr, OPEN_EXISTING, 0, nullptr);
+		checkf(m_screenBuffer != INVALID_HANDLE_VALUE,
+			"Failed to open CONOUT$ for renderer fallback");
+
+		// Suppress log output that would overwrite rendered cells.
+		std::freopen("NUL", "w", stdout);
+		std::freopen("NUL", "w", stderr);
+
+		// Clear the screen to erase any printf output that was written
+		// before the renderer took over (module loading, config init, etc.).
+		CONSOLE_SCREEN_BUFFER_INFO csbi;
+		if (::GetConsoleScreenBufferInfo(m_screenBuffer, &csbi))
+		{
+			DWORD total = static_cast<DWORD>(csbi.dwSize.X) * csbi.dwSize.Y;
+			COORD origin = { 0, 0 };
+			DWORD written = 0;
+			::FillConsoleOutputCharacterA(m_screenBuffer, ' ', total, origin, &written);
+			::FillConsoleOutputAttribute(m_screenBuffer, csbi.wAttributes, total, origin, &written);
+			::SetConsoleCursorPosition(m_screenBuffer, origin);
+		}
+	}
 
 	void* consoleOutputHandle = static_cast<void*>(m_screenBuffer);
 	createBackend(EAsciiRenderBackendType::Auto, consoleOutputHandle);
