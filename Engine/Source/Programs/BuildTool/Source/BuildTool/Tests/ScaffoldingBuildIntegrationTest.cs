@@ -125,7 +125,7 @@ public static class ScaffoldingBuildIntegrationTest
         Console.WriteLine("[Test 1] DebugGame: build, verify layout, run");
         BuildVerifyAndRun(
             BuildConfiguration.DebugGame,
-            expectedExeName: $"{_projectName}-Win64-DebugGame.exe",
+            expectedExeName: $"{BinaryNaming.GetExecutableOutputName(_projectName, BuildConfiguration.DebugGame, "Win64")}.exe",
             expectModular: true,
             dllSuffix: "-Win64-DebugGame");
         Console.WriteLine("  PASSED");
@@ -138,7 +138,7 @@ public static class ScaffoldingBuildIntegrationTest
         Console.WriteLine("[Test 2] Development: build, verify layout, run");
         BuildVerifyAndRun(
             BuildConfiguration.Development,
-            expectedExeName: $"{_projectName}.exe",
+            expectedExeName: $"{BinaryNaming.GetExecutableOutputName(_projectName, BuildConfiguration.Development, "Win64")}.exe",
             expectModular: true,
             dllSuffix: "");
         Console.WriteLine("  PASSED");
@@ -151,7 +151,7 @@ public static class ScaffoldingBuildIntegrationTest
         Console.WriteLine("[Test 3] Shipping: build, verify monolithic, run");
         BuildVerifyAndRun(
             BuildConfiguration.Shipping,
-            expectedExeName: $"{_projectName}-Win64-Shipping.exe",
+            expectedExeName: $"{BinaryNaming.GetExecutableOutputName(_projectName, BuildConfiguration.Shipping, "Win64")}.exe",
             expectModular: false,
             dllSuffix: "");
         Console.WriteLine("  PASSED");
@@ -396,8 +396,11 @@ public static class ScaffoldingBuildIntegrationTest
                 Directory.Delete(_projectDir, recursive: true);
 
             // Clean engine binaries produced by this project
+            // Modular builds use "EnigmaEngine" prefix; Shipping uses project name
             if (Directory.Exists(_engineOutputDir))
             {
+                foreach (var file in Directory.GetFiles(_engineOutputDir, $"{BinaryNaming.EngineBinaryName}*"))
+                    File.Delete(file);
                 foreach (var file in Directory.GetFiles(_engineOutputDir, $"{_projectName}*"))
                     File.Delete(file);
             }
