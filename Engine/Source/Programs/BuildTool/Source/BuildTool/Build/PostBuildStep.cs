@@ -5,6 +5,7 @@ namespace BuildTool.Build;
 using BuildTool.Generators;
 using BuildTool.Models;
 using BuildTool.Scanners;
+using static BuildTool.Models.BinaryNaming;
 
 /// <summary>
 /// Context for post-build binary placement and manifest generation.
@@ -238,9 +239,7 @@ public static class PostBuildStep
 
         // EXE: Modular builds → Engine/Binaries/ (alongside engine DLLs, like UE)
         //       Shipping → Project/Binaries/ (monolithic, no DLL dependencies)
-        var exeName = config == BuildConfiguration.Development
-            ? $"{projectName}.exe"
-            : $"{projectName}-{platform}-{config}.exe";
+        var exeName = $"{BinaryNaming.GetExecutableOutputName(projectName, config, platform)}.exe";
         map[exeName] = config == BuildConfiguration.Shipping ? gameOutputDir : engineOutputDir;
 
         return map;

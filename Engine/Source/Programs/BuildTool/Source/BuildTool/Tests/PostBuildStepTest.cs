@@ -154,18 +154,18 @@ public static class PostBuildStepTest
         else
         {
             // Engine modules
-            CreateFakeFile(buildDir, "TestGame-Core.dll");
-            CreateFakeFile(buildDir, "TestGame-Core.pdb");
-            CreateFakeFile(buildDir, "TestGame-Engine.dll");
-            CreateFakeFile(buildDir, "TestGame-Engine.pdb");
-            CreateFakeFile(buildDir, "TestGame-Launch.dll");
-            CreateFakeFile(buildDir, "TestGame-Launch.pdb");
+            CreateFakeFile(buildDir, "EnigmaEngine-Core.dll");
+            CreateFakeFile(buildDir, "EnigmaEngine-Core.pdb");
+            CreateFakeFile(buildDir, "EnigmaEngine-Engine.dll");
+            CreateFakeFile(buildDir, "EnigmaEngine-Engine.pdb");
+            CreateFakeFile(buildDir, "EnigmaEngine-Launch.dll");
+            CreateFakeFile(buildDir, "EnigmaEngine-Launch.pdb");
             // Game modules
-            CreateFakeFile(buildDir, "TestGame-GamePlay.dll");
-            CreateFakeFile(buildDir, "TestGame-GamePlay.pdb");
+            CreateFakeFile(buildDir, "EnigmaEngine-GamePlay.dll");
+            CreateFakeFile(buildDir, "EnigmaEngine-GamePlay.pdb");
             // EXE
-            CreateFakeFile(buildDir, "TestGame.exe");
-            CreateFakeFile(buildDir, "TestGame.pdb");
+            CreateFakeFile(buildDir, "EnigmaEngine.exe");
+            CreateFakeFile(buildDir, "EnigmaEngine.pdb");
         }
         return (buildDir, projectRoot, engineRoot);
     }
@@ -217,13 +217,13 @@ public static class PostBuildStepTest
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
             string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
-            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Core.dll")), "Core DLL in Engine");
-            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Engine.dll")), "Engine DLL in Engine");
-            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Launch.dll")), "Launch DLL in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "EnigmaEngine-Core.dll")), "Core DLL in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "EnigmaEngine-Engine.dll")), "Engine DLL in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "EnigmaEngine-Launch.dll")), "Launch DLL in Engine");
 
             string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
-            Assert(!File.Exists(Path.Combine(gameBin, "TestGame-Core.dll")), "Core DLL NOT in Game");
-            Assert(!File.Exists(Path.Combine(gameBin, "TestGame-Engine.dll")), "Engine DLL NOT in Game");
+            Assert(!File.Exists(Path.Combine(gameBin, "EnigmaEngine-Core.dll")), "Core DLL NOT in Game");
+            Assert(!File.Exists(Path.Combine(gameBin, "EnigmaEngine-Engine.dll")), "Engine DLL NOT in Game");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
@@ -242,12 +242,12 @@ public static class PostBuildStepTest
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
             string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
-            Assert(File.Exists(Path.Combine(gameBin, "TestGame-GamePlay.dll")), "GamePlay DLL in Game");
+            Assert(File.Exists(Path.Combine(gameBin, "EnigmaEngine-GamePlay.dll")), "GamePlay DLL in Game");
 
             // EXE goes to Engine/Binaries/ in Modular builds (alongside engine DLLs)
             string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
-            Assert(File.Exists(Path.Combine(engineBin, "TestGame.exe")), "EXE in Engine");
-            Assert(!File.Exists(Path.Combine(gameBin, "TestGame.exe")), "EXE NOT in Game");
+            Assert(File.Exists(Path.Combine(engineBin, "EnigmaEngine.exe")), "EXE in Engine");
+            Assert(!File.Exists(Path.Combine(gameBin, "EnigmaEngine.exe")), "EXE NOT in Game");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
@@ -267,10 +267,10 @@ public static class PostBuildStepTest
 
             string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
             string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
-            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Core.pdb")), "Core PDB in Engine");
-            Assert(File.Exists(Path.Combine(engineBin, "TestGame-Engine.pdb")), "Engine PDB in Engine");
-            Assert(File.Exists(Path.Combine(gameBin, "TestGame-GamePlay.pdb")), "GamePlay PDB in Game");
-            Assert(File.Exists(Path.Combine(engineBin, "TestGame.pdb")), "EXE PDB in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "EnigmaEngine-Core.pdb")), "Core PDB in Engine");
+            Assert(File.Exists(Path.Combine(engineBin, "EnigmaEngine-Engine.pdb")), "Engine PDB in Engine");
+            Assert(File.Exists(Path.Combine(gameBin, "EnigmaEngine-GamePlay.pdb")), "GamePlay PDB in Game");
+            Assert(File.Exists(Path.Combine(engineBin, "EnigmaEngine.pdb")), "EXE PDB in Engine");
             Console.WriteLine("  PASSED");
         }
         finally { CleanupRoot(projectRoot); }
@@ -288,7 +288,7 @@ public static class PostBuildStepTest
             var result = PostBuildStep.Execute(ctx);
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
-            var modulesPath = Path.Combine(engineRoot, "Binaries", "Win64", "TestGame.modules");
+            var modulesPath = Path.Combine(engineRoot, "Binaries", "Win64", "EnigmaEngine.modules");
             Assert(File.Exists(modulesPath), "Engine .modules should exist");
 
             var json = ParseJson(File.ReadAllText(modulesPath));
@@ -314,7 +314,7 @@ public static class PostBuildStepTest
             var result = PostBuildStep.Execute(ctx);
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
-            var modulesPath = Path.Combine(projectRoot, "Binaries", "Win64", "TestGame.modules");
+            var modulesPath = Path.Combine(projectRoot, "Binaries", "Win64", "EnigmaEngine.modules");
             Assert(File.Exists(modulesPath), "Game .modules should exist");
 
             var json = ParseJson(File.ReadAllText(modulesPath));
@@ -339,7 +339,7 @@ public static class PostBuildStepTest
             var result = PostBuildStep.Execute(ctx);
             Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
 
-            var targetPath = Path.Combine(projectRoot, "Binaries", "Win64", "TestGame.target");
+            var targetPath = Path.Combine(projectRoot, "Binaries", "Win64", "EnigmaEngine.target");
             Assert(File.Exists(targetPath), ".target file should exist");
 
             var json = ParseJson(File.ReadAllText(targetPath));
@@ -463,7 +463,7 @@ public static class PostBuildStepTest
             // Pre-create engine output dir and lock a file that will be overwritten
             string engineBin = Path.Combine(engineRoot, "Binaries", "Win64");
             Directory.CreateDirectory(engineBin);
-            string lockedPath = Path.Combine(engineBin, "TestGame-Core.dll");
+            string lockedPath = Path.Combine(engineBin, "EnigmaEngine-Core.dll");
             File.WriteAllBytes(lockedPath, new byte[] { 0x00 });
 
             // Hold an exclusive lock on the file

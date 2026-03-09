@@ -69,15 +69,15 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("MyGame", modules, buildId: "TEST001");
 
         Assert(result.Success, "Generation should succeed");
-        var modulesFile = result.Files["Binaries/Win64/MyGame.modules"];
+        var modulesFile = result.Files["Binaries/Win64/EnigmaEngine.modules"];
         var root = ParseJson(modulesFile);
 
         Assert(root.GetProperty("BuildId").GetString() == "TEST001",
             "BuildId should be TEST001");
         var mods = root.GetProperty("Modules");
-        Assert(mods.GetProperty("Core").GetString() == "MyGame-Core.dll",
+        Assert(mods.GetProperty("Core").GetString() == "EnigmaEngine-Core.dll",
             "Core DLL name");
-        Assert(mods.GetProperty("Engine").GetString() == "MyGame-Engine.dll",
+        Assert(mods.GetProperty("Engine").GetString() == "EnigmaEngine-Engine.dll",
             "Engine DLL name");
     }
 
@@ -91,10 +91,10 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("EnigmaArcade", modules,
             BuildConfiguration.Development, buildId: "B1");
 
-        var json = ParseJson(result.Files["Binaries/Win64/EnigmaArcade.modules"]);
+        var json = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.modules"]);
         var dll = json.GetProperty("Modules").GetProperty("ArcadeCore").GetString();
-        Assert(dll == "EnigmaArcade-ArcadeCore.dll",
-            $"Expected EnigmaArcade-ArcadeCore.dll, got {dll}");
+        Assert(dll == "EnigmaEngine-ArcadeCore.dll",
+            $"Expected EnigmaEngine-ArcadeCore.dll, got {dll}");
     }
 
     // ── Test 3: DebugGame DLL naming ────────────────────────
@@ -107,11 +107,11 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("EnigmaArcade", modules,
             BuildConfiguration.DebugGame, buildId: "B2");
 
-        var key = "Binaries/Win64/EnigmaArcade-Win64-DebugGame.modules";
+        var key = "Binaries/Win64/EnigmaEngine-Win64-DebugGame.modules";
         Assert(result.Files.ContainsKey(key), $"Should have file at {key}");
         var json = ParseJson(result.Files[key]);
         var dll = json.GetProperty("Modules").GetProperty("ArcadeCore").GetString();
-        Assert(dll == "EnigmaArcade-ArcadeCore-Win64-DebugGame.dll",
+        Assert(dll == "EnigmaEngine-ArcadeCore-Win64-DebugGame.dll",
             $"Expected DebugGame DLL name, got {dll}");
     }
     // ── Test 4: .target JSON structure ────────────────────────
@@ -125,14 +125,14 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("EnigmaArcade", modules,
             targetRules: target, buildId: "T001");
 
-        var json = ParseJson(result.Files["Binaries/Win64/EnigmaArcade.target"]);
+        var json = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.target"]);
 
         Assert(json.GetProperty("TargetName").GetString() == "EnigmaArcade", "TargetName");
         Assert(json.GetProperty("Platform").GetString() == "Win64", "Platform");
         Assert(json.GetProperty("Configuration").GetString() == "Development", "Configuration");
         Assert(json.GetProperty("TargetType").GetString() == "Game", "TargetType");
         Assert(json.GetProperty("Project").GetString() == "../../EnigmaArcade.eproject", "Project");
-        Assert(json.GetProperty("Launch").GetString() == "EnigmaArcade.exe", "Launch");
+        Assert(json.GetProperty("Launch").GetString() == "EnigmaEngine.exe", "Launch");
 
         var ver = json.GetProperty("Version");
         Assert(ver.GetProperty("MajorVersion").GetInt32() == 1, "MajorVersion");
@@ -152,16 +152,16 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("MyGame", modules,
             targetRules: target, buildId: "T002");
 
-        var json = ParseJson(result.Files["Binaries/Win64/MyGame.target"]);
+        var json = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.target"]);
         var products = json.GetProperty("BuildProducts");
         Assert(products.GetArrayLength() == 2, "Should have 2 build products");
 
         // Sorted alphabetically by Path
         var p0 = products[0];
-        Assert(p0.GetProperty("Path").GetString() == "MyGame-Core.dll", "First product path");
+        Assert(p0.GetProperty("Path").GetString() == "EnigmaEngine-Core.dll", "First product path");
         Assert(p0.GetProperty("Type").GetString() == "DynamicLibrary", "First product type");
         var p1 = products[1];
-        Assert(p1.GetProperty("Path").GetString() == "MyGame-Engine.dll", "Second product path");
+        Assert(p1.GetProperty("Path").GetString() == "EnigmaEngine-Engine.dll", "Second product path");
     }
 
     // ── Test 6: Plugin separate .modules file ───────────────
@@ -187,13 +187,13 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("MyGame", modules,
             pluginScanResult: pluginResult, buildId: "P001");
 
-        var pluginKey = "Plugins/RewindPlugin/Binaries/Win64/MyGame.modules";
+        var pluginKey = "Plugins/RewindPlugin/Binaries/Win64/EnigmaEngine.modules";
         Assert(result.Files.ContainsKey(pluginKey), $"Should have plugin .modules at {pluginKey}");
 
         var json = ParseJson(result.Files[pluginKey]);
         Assert(json.GetProperty("BuildId").GetString() == "P001", "Plugin BuildId matches");
         var mods = json.GetProperty("Modules");
-        Assert(mods.GetProperty("Rewind").GetString() == "MyGame-Rewind.dll", "Plugin module DLL");
+        Assert(mods.GetProperty("Rewind").GetString() == "EnigmaEngine-Rewind.dll", "Plugin module DLL");
     }
     // ── Test 7: Plugin modules excluded from project .modules ─
 
@@ -222,7 +222,7 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("MyGame", modules,
             pluginScanResult: pluginResult, buildId: "P002");
 
-        var projectJson = ParseJson(result.Files["Binaries/Win64/MyGame.modules"]);
+        var projectJson = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.modules"]);
         var mods = projectJson.GetProperty("Modules");
 
         Assert(mods.TryGetProperty("Core", out _), "Core should be in project .modules");
@@ -245,13 +245,13 @@ public static class ManifestGeneratorTest
             targetRules: target, buildId: "H001");
 
         // .modules should not contain header-only
-        var modulesJson = ParseJson(result.Files["Binaries/Win64/MyGame.modules"]);
+        var modulesJson = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.modules"]);
         var mods = modulesJson.GetProperty("Modules");
         Assert(mods.TryGetProperty("Core", out _), "Core present");
         Assert(!mods.TryGetProperty("nlohmann_json", out _), "nlohmann_json excluded");
 
         // .target BuildProducts should not contain header-only
-        var targetJson = ParseJson(result.Files["Binaries/Win64/MyGame.target"]);
+        var targetJson = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.target"]);
         var products = targetJson.GetProperty("BuildProducts");
         Assert(products.GetArrayLength() == 1, "Only 1 build product (Core)");
     }
@@ -267,8 +267,8 @@ public static class ManifestGeneratorTest
         var result = new ManifestGenerator().Generate("MyGame", modules,
             BuildConfiguration.Development, targetRules: target, buildId: "D1");
 
-        Assert(result.Files.ContainsKey("Binaries/Win64/MyGame.modules"), ".modules path");
-        Assert(result.Files.ContainsKey("Binaries/Win64/MyGame.target"), ".target path");
+        Assert(result.Files.ContainsKey("Binaries/Win64/EnigmaEngine.modules"), ".modules path");
+        Assert(result.Files.ContainsKey("Binaries/Win64/EnigmaEngine.target"), ".target path");
     }
 
     // ── Test 10: Manifest file naming (non-Development) ─────
@@ -322,16 +322,16 @@ public static class ManifestGeneratorTest
             targetRules: target, pluginScanResult: pluginResult, buildId: "CUSTOM42");
 
         // Check project .modules
-        var projMod = ParseJson(result.Files["Binaries/Win64/MyGame.modules"]);
+        var projMod = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.modules"]);
         Assert(projMod.GetProperty("BuildId").GetString() == "CUSTOM42", "Project .modules BuildId");
 
         // Check .target Version.BuildId
-        var tgt = ParseJson(result.Files["Binaries/Win64/MyGame.target"]);
+        var tgt = ParseJson(result.Files["Binaries/Win64/EnigmaEngine.target"]);
         Assert(tgt.GetProperty("Version").GetProperty("BuildId").GetString() == "CUSTOM42",
             ".target Version.BuildId");
 
         // Check plugin .modules
-        var plugMod = ParseJson(result.Files["Plugins/FeatPlugin/Binaries/Win64/MyGame.modules"]);
+        var plugMod = ParseJson(result.Files["Plugins/FeatPlugin/Binaries/Win64/EnigmaEngine.modules"]);
         Assert(plugMod.GetProperty("BuildId").GetString() == "CUSTOM42", "Plugin .modules BuildId");
     }
 
@@ -356,11 +356,11 @@ public static class ManifestGeneratorTest
 
         var configs = new[]
         {
-            (BuildConfiguration.Debug,       "MyGame-Core-Win64-Debug.dll",       "MyGame-Win64-Debug"),
-            (BuildConfiguration.DebugGame,   "MyGame-Core-Win64-DebugGame.dll",   "MyGame-Win64-DebugGame"),
-            (BuildConfiguration.Development, "MyGame-Core.dll",                   "MyGame"),
+            (BuildConfiguration.Debug,       "EnigmaEngine-Core-Win64-Debug.dll",       "EnigmaEngine-Win64-Debug"),
+            (BuildConfiguration.DebugGame,   "EnigmaEngine-Core-Win64-DebugGame.dll",   "EnigmaEngine-Win64-DebugGame"),
+            (BuildConfiguration.Development, "EnigmaEngine-Core.dll",                   "EnigmaEngine"),
             (BuildConfiguration.Shipping,    "MyGame-Core-Win64-Shipping.dll",    "MyGame-Win64-Shipping"),
-            (BuildConfiguration.Test,        "MyGame-Core-Win64-Test.dll",        "MyGame-Win64-Test"),
+            (BuildConfiguration.Test,        "EnigmaEngine-Core-Win64-Test.dll",        "EnigmaEngine-Win64-Test"),
         };
 
         foreach (var (config, expectedDll, expectedBase) in configs)
@@ -391,8 +391,8 @@ public static class ManifestGeneratorTest
         // Development
         var devResult = new ManifestGenerator().Generate("MyGame", modules,
             BuildConfiguration.Development, targetRules: target, buildId: "L1");
-        var devJson = ParseJson(devResult.Files["Binaries/Win64/MyGame.target"]);
-        Assert(devJson.GetProperty("Launch").GetString() == "MyGame.exe",
+        var devJson = ParseJson(devResult.Files["Binaries/Win64/EnigmaEngine.target"]);
+        Assert(devJson.GetProperty("Launch").GetString() == "EnigmaEngine.exe",
             "Development launch exe");
 
         // Shipping

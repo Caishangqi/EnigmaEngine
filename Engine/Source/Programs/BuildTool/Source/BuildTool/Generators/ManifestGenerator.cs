@@ -218,9 +218,7 @@ public sealed class ManifestGenerator
     {
         var buildProducts = new List<BuildProduct>();
 
-        var launchExe = configuration == BuildConfiguration.Development
-            ? $"{projectName}.exe"
-            : $"{projectName}-{platform}-{configuration}.exe";
+        var launchExe = $"{BinaryNaming.GetExecutableOutputName(projectName, configuration, platform)}.exe";
 
         if (linkType == "Monolithic")
         {
@@ -288,30 +286,26 @@ public sealed class ManifestGenerator
 
     /// <summary>
     /// Get the DLL file name for a module following REQ-015 naming convention.
-    ///   Development: {ProjectName}-{ModuleName}.dll
-    ///   Others:      {ProjectName}-{ModuleName}-{Platform}-{Config}.dll
+    /// Delegates to <see cref="BinaryNaming.GetDllFileName"/> for centralized prefix logic.
+    ///   Modular:   EnigmaEngine-{ModuleName}.dll / EnigmaEngine-{ModuleName}-{Platform}-{Config}.dll
+    ///   Shipping:  {ProjectName}-{ModuleName}-{Platform}-Shipping.dll
     /// </summary>
     internal static string GetDllFileName(
         string projectName, string moduleName, BuildConfiguration configuration, string platform)
     {
-        if (configuration == BuildConfiguration.Development)
-            return $"{projectName}-{moduleName}.dll";
-
-        return $"{projectName}-{moduleName}-{platform}-{configuration}.dll";
+        return BinaryNaming.GetDllFileName(projectName, moduleName, configuration, platform);
     }
 
     /// <summary>
     /// Get the manifest base file name (without extension).
-    ///   Development: {ProjectName}
-    ///   Others:      {ProjectName}-{Platform}-{Config}
+    /// Delegates to <see cref="BinaryNaming.GetManifestBaseName"/> for centralized prefix logic.
+    ///   Modular:   EnigmaEngine / EnigmaEngine-{Platform}-{Config}
+    ///   Shipping:  {ProjectName}-{Platform}-Shipping
     /// </summary>
     internal static string GetManifestBaseName(
         string projectName, BuildConfiguration configuration, string platform)
     {
-        if (configuration == BuildConfiguration.Development)
-            return projectName;
-
-        return $"{projectName}-{platform}-{configuration}";
+        return BinaryNaming.GetManifestBaseName(projectName, configuration, platform);
     }
 
     /// <summary>

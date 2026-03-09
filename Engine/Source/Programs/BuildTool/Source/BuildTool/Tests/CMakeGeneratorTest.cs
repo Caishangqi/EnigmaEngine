@@ -407,7 +407,8 @@ public static class CMakeGeneratorTest
     }
 
     /// <summary>
-    /// Development configuration uses short DLL name: {ProjectName}-{ModuleName}
+    /// Development configuration uses short DLL name: {EnigmaEngine}-{ModuleName}
+    /// (non-Shipping builds use fixed "EnigmaEngine" prefix instead of project name)
     /// </summary>
     private static void TestDllNamingDevelopment()
     {
@@ -431,11 +432,11 @@ public static class CMakeGeneratorTest
         Assert(result.Success, $"Expected success, got error: {result.Error}");
         var c = result.Content;
 
-        // Development: OUTPUT_NAME = "{ProjectName}-{ModuleName}"
-        Assert(c.Contains("OUTPUT_NAME \"EnigmaArcade-Core\""),
-            "Development Core should be EnigmaArcade-Core");
-        Assert(c.Contains("OUTPUT_NAME \"EnigmaArcade-ArcadeCore\""),
-            "Development ArcadeCore should be EnigmaArcade-ArcadeCore");
+        // Development: OUTPUT_NAME = "{EnigmaEngine}-{ModuleName}"
+        Assert(c.Contains("OUTPUT_NAME \"EnigmaEngine-Core\""),
+            "Development Core should be EnigmaEngine-Core");
+        Assert(c.Contains("OUTPUT_NAME \"EnigmaEngine-ArcadeCore\""),
+            "Development ArcadeCore should be EnigmaEngine-ArcadeCore");
 
         // Should NOT contain platform or config suffix
         Assert(!c.Contains("Win64-Development"), "Development should not have platform-config suffix");
@@ -444,7 +445,8 @@ public static class CMakeGeneratorTest
     }
 
     /// <summary>
-    /// Non-Development configurations use full DLL name: {ProjectName}-{ModuleName}-{Platform}-{Config}
+    /// Non-Development configurations use full DLL name: {Prefix}-{ModuleName}-{Platform}-{Config}
+    /// Shipping uses project name as prefix; other non-Development configs use "EnigmaEngine".
     /// </summary>
     private static void TestDllNamingNonDevelopment()
     {
@@ -480,10 +482,12 @@ public static class CMakeGeneratorTest
             Assert(result.Success, $"Expected success for {configName}, got error: {result.Error}");
             var c = result.Content;
 
-            Assert(c.Contains($"OUTPUT_NAME \"EnigmaArcade-Core-Win64-{configName}\""),
-                $"{configName} Core should be EnigmaArcade-Core-Win64-{configName}");
-            Assert(c.Contains($"OUTPUT_NAME \"EnigmaArcade-ArcadeCore-Win64-{configName}\""),
-                $"{configName} ArcadeCore should be EnigmaArcade-ArcadeCore-Win64-{configName}");
+            // Shipping uses project name, others use engine name
+            var prefix = config == BuildConfiguration.Shipping ? "EnigmaArcade" : "EnigmaEngine";
+            Assert(c.Contains($"OUTPUT_NAME \"{prefix}-Core-Win64-{configName}\""),
+                $"{configName} Core should be {prefix}-Core-Win64-{configName}");
+            Assert(c.Contains($"OUTPUT_NAME \"{prefix}-ArcadeCore-Win64-{configName}\""),
+                $"{configName} ArcadeCore should be {prefix}-ArcadeCore-Win64-{configName}");
         }
 
         Console.WriteLine("  PASSED");

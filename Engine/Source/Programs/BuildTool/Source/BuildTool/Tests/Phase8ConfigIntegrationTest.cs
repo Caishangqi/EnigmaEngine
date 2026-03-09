@@ -178,11 +178,11 @@ public static class Phase8ConfigIntegrationTest
 
         var expectations = new (BuildConfiguration config, string expectedPattern)[]
         {
-            (BuildConfiguration.Debug,       "EnigmaArcade-Core-Win64-Debug"),
-            (BuildConfiguration.DebugGame,   "EnigmaArcade-Core-Win64-DebugGame"),
-            (BuildConfiguration.Development, "EnigmaArcade-Core\""),  // short name, no platform
+            (BuildConfiguration.Debug,       "EnigmaEngine-Core-Win64-Debug"),
+            (BuildConfiguration.DebugGame,   "EnigmaEngine-Core-Win64-DebugGame"),
+            (BuildConfiguration.Development, "EnigmaEngine-Core\""),  // short name, no platform
             (BuildConfiguration.Shipping,    "EnigmaArcade-Core-Win64-Shipping"),
-            (BuildConfiguration.Test,        "EnigmaArcade-Core-Win64-Test"),
+            (BuildConfiguration.Test,        "EnigmaEngine-Core-Win64-Test"),
         };
 
         int testNum = 6;
@@ -309,7 +309,7 @@ public static class Phase8ConfigIntegrationTest
             var result = gen.Generate("EnigmaArcade", modules, BuildConfiguration.Development,
                 targetRules: targetRules, pluginScanResult: pluginResult, buildId: "N2");
 
-            Check(result.Files.ContainsKey("Binaries/Win64/EnigmaArcade.modules"),
+            Check(result.Files.ContainsKey("Binaries/Win64/EnigmaEngine.modules"),
                 "[22] Development .modules uses short name");
         }
 
@@ -319,7 +319,7 @@ public static class Phase8ConfigIntegrationTest
             var result = gen.Generate("EnigmaArcade", modules, BuildConfiguration.Development,
                 pluginScanResult: pluginResult, buildId: "N3");
 
-            var pluginKey = "Plugins/RewindPlugin/Binaries/Win64/EnigmaArcade.modules";
+            var pluginKey = "Plugins/RewindPlugin/Binaries/Win64/EnigmaEngine.modules";
             Check(result.Files.ContainsKey(pluginKey),
                 "[23] Plugin .modules file generated at Plugins/RewindPlugin/...");
 
@@ -337,7 +337,7 @@ public static class Phase8ConfigIntegrationTest
             var result = gen.Generate("EnigmaArcade", modules, BuildConfiguration.Development,
                 targetRules: targetRules, buildId: "N4");
 
-            var json = result.Files["Binaries/Win64/EnigmaArcade.modules"];
+            var json = result.Files["Binaries/Win64/EnigmaEngine.modules"];
             Check(!json.Contains("nlohmann_json"),
                 "[24] Header-only (nlohmann_json) excluded from .modules");
         }

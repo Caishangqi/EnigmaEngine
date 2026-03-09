@@ -1,6 +1,7 @@
 using System.Text;
 using BuildTool.Analysis;
 using BuildTool.Models;
+using static BuildTool.Models.BinaryNaming;
 
 namespace BuildTool.Generators;
 
@@ -391,36 +392,22 @@ public sealed class CMakeGenerator
 
     /// <summary>
     /// Compute the output name for a module target following REQ-015 DLL naming convention.
-    ///
-    ///   Development: {ProjectName}-{ModuleName}
-    ///   Others:      {ProjectName}-{ModuleName}-{Platform}-{Config}
+    /// Delegates to <see cref="BinaryNaming.GetOutputName"/> for centralized prefix logic.
     /// </summary>
     private static string GetOutputName(
         string projectName, string moduleName, BuildConfiguration configuration, string platform)
     {
-        if (configuration == BuildConfiguration.Development)
-        {
-            return $"{projectName}-{moduleName}";
-        }
-
-        return $"{projectName}-{moduleName}-{platform}-{configuration}";
+        return BinaryNaming.GetOutputName(projectName, moduleName, configuration, platform);
     }
 
     /// <summary>
-    /// Compute the output name for an executable target following UE naming convention.
-    ///
-    ///   Development: {ProjectName}
-    ///   Others:      {ProjectName}-{Platform}-{Config}
+    /// Compute the output name for an executable target.
+    /// Delegates to <see cref="BinaryNaming.GetExecutableOutputName"/> for centralized prefix logic.
     /// </summary>
     private static string GetExecutableOutputName(
         string projectName, BuildConfiguration configuration, string platform)
     {
-        if (configuration == BuildConfiguration.Development)
-        {
-            return projectName;
-        }
-
-        return $"{projectName}-{platform}-{configuration}";
+        return BinaryNaming.GetExecutableOutputName(projectName, configuration, platform);
     }
 
     /// <summary>

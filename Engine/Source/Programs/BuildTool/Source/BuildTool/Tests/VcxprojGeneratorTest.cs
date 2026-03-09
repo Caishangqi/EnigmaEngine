@@ -307,11 +307,11 @@ public static class VcxprojGeneratorTest
             var outputs = doc.Descendants(Ns + "NMakeOutput").ToList();
             Assert(outputs.Count == 4, $"Expected 4 NMakeOutput, got {outputs.Count}");
             // Development config should produce {ProjectName}-{ModuleName}.dll
-            Assert(outputs.Any(o => o.Value.Contains("TestProject-Core.dll")),
-                "Missing Development DLL: TestProject-Core.dll");
+            Assert(outputs.Any(o => o.Value.Contains("EnigmaEngine-Core.dll")),
+                "Missing Development DLL: EnigmaEngine-Core.dll");
             // DebugGame config should produce {ProjectName}-{ModuleName}-Win64-{Config}.dll
-            Assert(outputs.Any(o => o.Value.Contains("TestProject-Core-Win64-DebugGame.dll")),
-                "Missing DebugGame DLL: TestProject-Core-Win64-DebugGame.dll");
+            Assert(outputs.Any(o => o.Value.Contains("EnigmaEngine-Core-Win64-DebugGame.dll")),
+                "Missing DebugGame DLL: EnigmaEngine-Core-Win64-DebugGame.dll");
             Console.WriteLine("  PASSED");
         }
         finally { Cleanup(tempDir); }
@@ -346,11 +346,11 @@ public static class VcxprojGeneratorTest
             var outputs = doc.Descendants(Ns + "NMakeOutput").ToList();
             Assert(outputs.Count == 4, $"Expected 4 NMakeOutput, got {outputs.Count}");
             // Development: {ProjectName}.exe (executable uses project name, not module name)
-            Assert(outputs.Any(o => o.Value.Contains("TestProject.exe")),
-                "Missing Development EXE: TestProject.exe");
+            Assert(outputs.Any(o => o.Value.Contains("EnigmaEngine.exe")),
+                "Missing Development EXE: EnigmaEngine.exe");
             // DebugGame: {ProjectName}-Win64-{Config}.exe
-            Assert(outputs.Any(o => o.Value.Contains("TestProject-Win64-DebugGame.exe")),
-                "Missing DebugGame EXE: TestProject-Win64-DebugGame.exe");
+            Assert(outputs.Any(o => o.Value.Contains("EnigmaEngine-Win64-DebugGame.exe")),
+                "Missing DebugGame EXE: EnigmaEngine-Win64-DebugGame.exe");
             Console.WriteLine("  PASSED");
         }
         finally { Cleanup(tempDir); }

@@ -491,19 +491,21 @@ public sealed class VcxprojGenerator
     private static string ComputeNMakeOutput(string moduleName, string projectName, bool isExecutable, string buildConfig)
     {
         const string binDir = @"..\..\Binaries\Win64";
-        bool isDevelopment = buildConfig.Equals("Development", StringComparison.OrdinalIgnoreCase);
+        var config = Enum.Parse<BuildConfiguration>(buildConfig, ignoreCase: true);
+        var prefix = BinaryNaming.GetBinaryPrefix(projectName, config);
+        bool isDevelopment = config == BuildConfiguration.Development;
 
         if (isExecutable)
         {
             string exeName = isDevelopment
-                ? $"{projectName}.exe"
-                : $"{projectName}-Win64-{buildConfig}.exe";
+                ? $"{prefix}.exe"
+                : $"{prefix}-Win64-{buildConfig}.exe";
             return $@"{binDir}\{exeName}";
         }
 
         string dllName = isDevelopment
-            ? $"{projectName}-{moduleName}.dll"
-            : $"{projectName}-{moduleName}-Win64-{buildConfig}.dll";
+            ? $"{prefix}-{moduleName}.dll"
+            : $"{prefix}-{moduleName}-Win64-{buildConfig}.dll";
         return $@"{binDir}\{dllName}";
     }
 
