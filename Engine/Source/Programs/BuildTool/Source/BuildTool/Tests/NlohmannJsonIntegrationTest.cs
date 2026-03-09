@@ -88,9 +88,12 @@ public static class NlohmannJsonIntegrationTest
         {
             [moduleRules.ModuleName] = moduleRules,
         };
-        foreach (var (name, rules) in thirdPartyModules)
+        // Only merge ThirdParty modules that are actually referenced as dependencies
+        foreach (var dep in moduleRules.PublicDependencyModuleNames
+            .Concat(moduleRules.PrivateDependencyModuleNames))
         {
-            modules[name] = rules;
+            if (thirdPartyModules.TryGetValue(dep, out var depRules))
+                modules[dep] = depRules;
         }
         Check(modules.ContainsKey("nlohmann_json")
            && modules.ContainsKey("NlohmannJsonIntegrationTest"),
@@ -155,7 +158,7 @@ public static class NlohmannJsonIntegrationTest
 
         // ---- Step 13-15: Execute and verify ----
         Console.WriteLine("[Step 13-15] Execute and verify output ...");
-        var exePath = FindExecutable(buildDir, "NlohmannJsonIntegrationTest");
+        var exePath = FindExecutable(buildDir, BinaryNaming.EngineBinaryName);
         if (exePath is null)
         {
             Check(false, "[13] Executable found");
