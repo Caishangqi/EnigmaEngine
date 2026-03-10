@@ -222,11 +222,11 @@ public static class PostBuildStep
             map[dllName] = gameOutputDir;
         }
 
-        // Plugin modules → Plugins/{PluginName}/Binaries/
+        // Plugin modules → {PluginDir}/Binaries/ (engine plugins stay under Engine/, game plugins under Project/)
         foreach (var (pluginName, descriptor) in scan.PluginScanResult.EnabledPlugins)
         {
-            string pluginOutputDir = Path.Combine(
-                scan.ProjectRoot, "Plugins", pluginName, "Binaries", platform);
+            string pluginDir = Path.GetDirectoryName(descriptor.SourceFilePath)!;
+            string pluginOutputDir = Path.Combine(pluginDir, "Binaries", platform);
             foreach (var moduleDesc in descriptor.Modules)
             {
                 if (scan.PluginScanResult.Modules.TryGetValue(moduleDesc.Name, out var rules) && !rules.IsHeaderOnly)
@@ -367,6 +367,16 @@ public static class PostBuildStep
                 engineModuleNames.Add(name);
         }
 
+        // Build engine plugin name set (plugins whose .eplugin lives under EngineRoot)
+        var enginePluginNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var engineRootNorm = Path.GetFullPath(scan.EngineRoot) + Path.DirectorySeparatorChar;
+        foreach (var (pluginName, descriptor) in scan.PluginScanResult.EnabledPlugins)
+        {
+            var pluginPath = Path.GetFullPath(descriptor.SourceFilePath);
+            if (pluginPath.StartsWith(engineRootNorm, StringComparison.OrdinalIgnoreCase))
+                enginePluginNames.Add(pluginName);
+        }
+
         var generator = new ManifestGenerator();
         return generator.Generate(
             context.ProjectName,
@@ -376,6 +386,7 @@ public static class PostBuildStep
             scan.GameTarget,
             scan.PluginScanResult,
             linkType: linkType,
-            engineModuleNames: engineModuleNames);
+            engineModuleNames: engineModuleNames,
+            enginePluginNames: enginePluginNames);
     }
 }

@@ -53,8 +53,9 @@ public sealed class RemovePluginCommand : ICommand
             if (!eprojectResult.Success)
                 return BuildResult.Fail(eprojectResult.Message);
 
-            // 6. Delete plugin directory
-            var pluginDir = Path.Combine(scan.ProjectRoot, "Plugins", pluginName);
+            // 6. Delete plugin directory (use actual location from .eplugin, not hardcoded ProjectRoot)
+            var descriptor = scan.PluginScanResult.EnabledPlugins[pluginName];
+            var pluginDir = Path.GetDirectoryName(descriptor.SourceFilePath)!;
             if (Directory.Exists(pluginDir))
             {
                 Console.WriteLine($"[RemovePlugin] Deleting {pluginDir}...");

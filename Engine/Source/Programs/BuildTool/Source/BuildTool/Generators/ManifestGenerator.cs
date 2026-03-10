@@ -84,7 +84,8 @@ public sealed class ManifestGenerator
         PluginScanner.ScanResult? pluginScanResult = null,
         string? buildId = null,
         string linkType = "Modular",
-        IReadOnlySet<string>? engineModuleNames = null)
+        IReadOnlySet<string>? engineModuleNames = null,
+        IReadOnlySet<string>? enginePluginNames = null)
     {
         if (modules.Count == 0 && (pluginScanResult is null || pluginScanResult.Modules.Count == 0))
         {
@@ -166,7 +167,8 @@ public sealed class ManifestGenerator
 
                 var pluginModulesPath = $"Plugins/{pluginName}/Binaries/{platform}/{manifestName}.modules";
                 var pluginJson = GenerateModulesJson(id, pluginModules, projectName, configuration, platform);
-                files[pluginModulesPath] = pluginJson;
+                var targetDict = enginePluginNames?.Contains(pluginName) == true ? engineFiles : files;
+                targetDict[pluginModulesPath] = pluginJson;
             }
         }
 

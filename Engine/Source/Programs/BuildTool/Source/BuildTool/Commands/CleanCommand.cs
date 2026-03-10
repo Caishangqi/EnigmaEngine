@@ -75,10 +75,9 @@ public sealed class CleanCommand : ICommand
 
             if (scan?.PluginScanResult is not null)
             {
-                string pluginsDir = Path.Combine(projectRoot, "Plugins");
-                foreach (var (pluginName, _) in scan.PluginScanResult.EnabledPlugins)
+                foreach (var (pluginName, descriptor) in scan.PluginScanResult.EnabledPlugins)
                 {
-                    string pluginRoot = Path.Combine(pluginsDir, pluginName);
+                    string pluginRoot = Path.GetDirectoryName(descriptor.SourceFilePath)!;
                     deletedCount += TryDeleteDirectory(
                         Path.Combine(pluginRoot, "Binaries"), $"Plugin {pluginName}: Binaries");
                     deletedCount += TryDeleteDirectory(
@@ -105,10 +104,9 @@ public sealed class CleanCommand : ICommand
 
             if (scan?.PluginScanResult is not null)
             {
-                string pluginsDir = Path.Combine(projectRoot, "Plugins");
-                foreach (var (pluginName, _) in scan.PluginScanResult.EnabledPlugins)
+                foreach (var (pluginName, descriptor) in scan.PluginScanResult.EnabledPlugins)
                 {
-                    string pluginRoot = Path.Combine(pluginsDir, pluginName);
+                    string pluginRoot = Path.GetDirectoryName(descriptor.SourceFilePath)!;
                     deletedCount += TryDeleteDirectory(
                         Path.Combine(pluginRoot, "Intermediate", "Build", configName),
                         $"Plugin {pluginName}: Intermediate/Build/{configName}");
