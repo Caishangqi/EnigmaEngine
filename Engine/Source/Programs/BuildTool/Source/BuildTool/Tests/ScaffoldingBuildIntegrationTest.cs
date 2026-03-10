@@ -248,13 +248,13 @@ public static class ScaffoldingBuildIntegrationTest
             $"Output should contain '[GuardedMain]'. Got:\n{Truncate(output, 500)}");
         Console.WriteLine("  Output: [GuardedMain] ✓");
 
-        Assert(output.Contains("[GameUtils] StartupModule"),
-            $"Output should contain '[GameUtils] StartupModule'. Got:\n{Truncate(output, 500)}");
-        Console.WriteLine("  Output: [GameUtils] StartupModule ✓");
+        Assert(output.Contains("[LogGameUtils] Info: StartupModule"),
+            $"Output should contain '[LogGameUtils] Info: StartupModule'. Got:\n{Truncate(output, 500)}");
+        Console.WriteLine("  Output: [LogGameUtils] StartupModule ✓");
 
-        Assert(output.Contains("[TestFeature] StartupModule"),
-            $"Output should contain '[TestFeature] StartupModule'. Got:\n{Truncate(output, 500)}");
-        Console.WriteLine("  Output: [TestFeature] StartupModule ✓");
+        Assert(output.Contains("[LogTestFeature] Info: StartupModule"),
+            $"Output should contain '[LogTestFeature] Info: StartupModule'. Got:\n{Truncate(output, 500)}");
+        Console.WriteLine("  Output: [LogTestFeature] StartupModule ✓");
 
         // 6. Clean after test
         RunClean(config);
