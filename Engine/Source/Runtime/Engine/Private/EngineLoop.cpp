@@ -9,7 +9,8 @@
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/ConfigDelegates.h"
 
-#include <cstdio>
+#include "Logging/LogMacros.h"
+
 #include <filesystem>
 
 #ifdef _WIN32
@@ -19,6 +20,8 @@
 
 namespace Enigma
 {
+
+DEFINE_LOG_CATEGORY_STATIC(LogInit, Info, All);
 
 // ---------------------------------------------------------------
 // RequestExit / IsExitRequested -- delegate to Core globals
@@ -53,14 +56,11 @@ void FEngineLoop::LoadModulesForPhase(ELoadingPhase phase)
     auto& modules = ModulesByPhase[idx];
     for (auto& name : modules)
     {
-        std::printf("[FEngineLoop] Loading module '%s' (phase %d)\n",
-            name.c_str(), idx);
+        ENIGMA_LOG(LogInit, Info, "Loading module '{}' (phase {})", name, idx);
         auto* mod = FModuleManager::Get().LoadModule(name);
         if (!mod)
         {
-            std::fprintf(stderr,
-                "[FEngineLoop] ERROR: Failed to load module '%s'\n",
-                name.c_str());
+            ENIGMA_LOG(LogInit, Error, "Failed to load module '{}'", name);
         }
     }
 }
@@ -93,17 +93,16 @@ void FEngineLoop::RegisterPluginModules(
 
         moduleMgr.AddDllSearchPath(binariesPath);
 
-        std::printf("[FEngineLoop] Plugin '%s': added DLL search path '%s'\n",
-            pluginName.c_str(), binariesPath.c_str());
+        ENIGMA_LOG(LogInit, Info, "Plugin '{}': added DLL search path '{}'",
+            pluginName, binariesPath);
 
         // Register each module for PostEngineInit loading phase.
         for (const auto& moduleName : moduleNames)
         {
             AddModuleToPhase(ELoadingPhase::PostEngineInit, moduleName);
 
-            std::printf("[FEngineLoop] Plugin '%s': registered module '%s' "
-                "for PostEngineInit phase\n",
-                pluginName.c_str(), moduleName.c_str());
+            ENIGMA_LOG(LogInit, Info, "Plugin '{}': registered module '{}' for PostEngineInit phase",
+                pluginName, moduleName);
         }
     }
 }
@@ -113,8 +112,7 @@ void FEngineLoop::RegisterPluginModules(
 // ---------------------------------------------------------------
 int32_t FEngineLoop::PreInit(const char* cmdLine)
 {
-    std::printf("[FEngineLoop] PreInit begin (cmdLine: \"%s\")\n",
-        cmdLine ? cmdLine : "");
+    ENIGMA_LOG(LogInit, Info, "PreInit begin (cmdLine: \"{}\")", cmdLine ? cmdLine : "");
 
     // Phase 0: EarliestPossible (Core, fundamental modules)
     LoadModulesForPhase(ELoadingPhase::EarliestPossible);
@@ -151,6 +149,14 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
         if (::GetModuleFileNameA(nullptr, exePath, MAX_PATH) > 0)
         {
             std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
+
+            // Set TargetName for .modules manifest lookup.
+            // TargetName = exe filename without extension (e.g. "EnigmaEngine").
+            {
+                std::string exeStem = std::filesystem::path(exePath).stem().string();
+                FModuleManager::Get().SetTargetName(exeStem);
+                ENIGMA_LOG(LogInit, Info, "TargetName set to '{}'", exeStem);
+            }
 
             // Walk up from exe directory to find engine and project config.
             // Stop after a reasonable depth (16 levels) to avoid infinite loops.
@@ -273,7 +279,7 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
                 {
                     std::string gameBinStr = std::filesystem::canonical(gameBin).string();
                     FModuleManager::Get().AddDllSearchPath(gameBinStr);
-                    std::printf("[FEngineLoop] Game DLL search path: %s\n", gameBinStr.c_str());
+                    ENIGMA_LOG(LogInit, Info, "Game DLL search path: {}", gameBinStr);
                 }
 
                 // Register plugin DLL search paths: {ProjectDir}/Plugins/*/Binaries/{Platform}/
@@ -288,20 +294,46 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
                         {
                             std::string pluginBinStr = std::filesystem::canonical(pluginBin).string();
                             FModuleManager::Get().AddDllSearchPath(pluginBinStr);
-                            std::printf("[FEngineLoop] Plugin DLL search path: %s\n", pluginBinStr.c_str());
+                            ENIGMA_LOG(LogInit, Info, "Plugin DLL search path: {}", pluginBinStr);
                         }
                     }
                 }
 #endif
             }
         }
+
+        // --- Engine plugin DLL search paths ---
+        // Derive engine root from engineConfigDir: {EngineRoot}/Engine/Config -> {EngineRoot}/Engine
+        // Then scan {EngineRoot}/Engine/Plugins/*/Binaries/{Platform}/
+        if (!engineConfigDir.empty())
+        {
+#ifdef _WIN32
+            std::filesystem::path enginePluginsDir =
+                std::filesystem::path(engineConfigDir).parent_path() / "Plugins";
+            if (std::filesystem::exists(enginePluginsDir) && std::filesystem::is_directory(enginePluginsDir))
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(enginePluginsDir))
+                {
+                    if (!entry.is_directory()) continue;
+                    std::filesystem::path pluginBin = entry.path() / "Binaries" / "Win64";
+                    if (std::filesystem::exists(pluginBin))
+                    {
+                        std::string pluginBinStr = std::filesystem::canonical(pluginBin).string();
+                        FModuleManager::Get().AddDllSearchPath(pluginBinStr);
+                        ENIGMA_LOG(LogInit, Info, "Engine plugin DLL search path: {}",
+                            pluginBinStr);
+                    }
+                }
+            }
+#endif
+        }
     }
 
     GConfig = new FConfigCacheIni();
     GConfig->Initialize(engineConfigDir, projectConfigDir);
     FConfigDelegates::OnConfigReadyForUse.Broadcast();
-    std::printf("[FEngineLoop] GConfig initialized (engine: \"%s\", project: \"%s\")\n",
-        engineConfigDir.c_str(), projectConfigDir.c_str());
+    ENIGMA_LOG(LogInit, Info, "GConfig initialized (engine: \"{}\", project: \"{}\")",
+        engineConfigDir, projectConfigDir);
 
     // Phase 1: PostConfigInit (config-dependent modules -- can now read GConfig)
     LoadModulesForPhase(ELoadingPhase::PostConfigInit);
@@ -309,7 +341,7 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
     // Phase 2: PreLoadingScreen (Engine, Renderer)
     LoadModulesForPhase(ELoadingPhase::PreLoadingScreen);
 
-    std::printf("[FEngineLoop] PreInit complete\n");
+    ENIGMA_LOG(LogInit, Info, "PreInit complete");
     return 0;
 }
 
@@ -318,7 +350,7 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
 // ---------------------------------------------------------------
 int32_t FEngineLoop::Init()
 {
-    std::printf("[FEngineLoop] Init begin\n");
+    ENIGMA_LOG(LogInit, Info, "Init begin");
 
     // Create GEngine (FGameEngine for game mode)
     auto* gameEngine = new FGameEngine();
@@ -385,7 +417,7 @@ int32_t FEngineLoop::Init()
     FrameNumber  = 0;
     bIsRunning   = true;
 
-    std::printf("[FEngineLoop] Init complete -- engine running\n");
+    ENIGMA_LOG(LogInit, Info, "Init complete -- engine running");
     return 0;
 }
 
@@ -423,7 +455,7 @@ void FEngineLoop::Tick()
 // ---------------------------------------------------------------
 void FEngineLoop::Exit()
 {
-    std::printf("[FEngineLoop] Exit begin\n");
+    ENIGMA_LOG(LogInit, Info, "Exit begin");
 
     bIsRunning = false;
 
@@ -451,7 +483,7 @@ void FEngineLoop::Exit()
         GConfig = nullptr;
     }
 
-    std::printf("[FEngineLoop] Exit complete\n");
+    ENIGMA_LOG(LogInit, Info, "Exit complete");
 }
 
 } // namespace Enigma

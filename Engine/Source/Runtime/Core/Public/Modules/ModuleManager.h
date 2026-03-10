@@ -105,6 +105,13 @@ public:
     /// Returns the current DLL search paths (read-only).
     const std::vector<std::string>& GetDllSearchPaths() const { return DllSearchPaths; }
 
+    // ----- Target name (for .modules manifest lookup) -----
+
+    /// Set the target executable name (without extension).
+    /// ScanDllsFromDirectory() uses this to find {TargetName}.modules
+    /// and load only the DLLs listed in the manifest.
+    void SetTargetName(const std::string& name) { TargetName = name; }
+
 private:
     FModuleManager() = default;
     ~FModuleManager();
@@ -117,6 +124,7 @@ private:
     mutable std::mutex                              Mutex;
     std::unordered_map<std::string, FModuleInfo>    Modules;
     std::vector<std::string>                        DllSearchPaths;
+    std::string                                     TargetName;
     int32_t                                         NextLoadOrder = 0;
 };
 

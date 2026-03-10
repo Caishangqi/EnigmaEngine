@@ -2,10 +2,12 @@
 
 #include "Modules/ModuleManager.h"
 #include "Modules/ModuleInitializerEntry.h"
+#include "Logging/LogMacros.h"
 
 #include <algorithm>
-#include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <string>
 
 // Platform DLL loading
 #ifdef _WIN32
@@ -17,6 +19,8 @@
 
 namespace Enigma
 {
+
+DEFINE_LOG_CATEGORY_STATIC(LogModuleManager, Info, All);
 
 // ---------------------------------------------------------------
 // Singleton
@@ -142,8 +146,8 @@ IModuleInterface* FModuleManager::LoadModule(std::string_view name)
                 dllHandle = PlatformLoadDll(fullPath.c_str());
                 if (dllHandle)
                 {
-                    std::printf("[FModuleManager] Loaded '%s' from search path '%s'\n",
-                        key.c_str(), searchPath.c_str());
+                    ENIGMA_LOG(LogModuleManager, Info, "Loaded '{}' from search path '{}'",
+                        key, searchPath);
                     break;
                 }
             }
@@ -151,11 +155,9 @@ IModuleInterface* FModuleManager::LoadModule(std::string_view name)
 
         if (!dllHandle)
         {
-            std::fprintf(stderr,
-                "[FModuleManager] ERROR: Failed to load DLL '%s'"
-                " (searched %zu additional path(s))\n",
-                dllName.c_str(),
-                DllSearchPaths.size());
+            ENIGMA_LOG(LogModuleManager, Error,
+                "Failed to load DLL '{}' (searched {} additional path(s))",
+                dllName, DllSearchPaths.size());
             return nullptr;
         }
 
@@ -163,10 +165,9 @@ IModuleInterface* FModuleManager::LoadModule(std::string_view name)
         initFn = FModuleInitializerEntry::FindModule(key.c_str());
         if (!initFn)
         {
-            std::fprintf(stderr,
-                "[FModuleManager] ERROR: Module '%s' loaded but no "
-                "initializer found (missing IMPLEMENT_MODULE?)\n",
-                key.c_str());
+            ENIGMA_LOG(LogModuleManager, Error,
+                "Module '{}' loaded but no initializer found (missing IMPLEMENT_MODULE?)",
+                key);
             PlatformFreeDll(dllHandle);
             return nullptr;
         }
@@ -176,9 +177,7 @@ IModuleInterface* FModuleManager::LoadModule(std::string_view name)
     IModuleInterface* rawModule = initFn();
     if (!rawModule)
     {
-        std::fprintf(stderr,
-            "[FModuleManager] ERROR: Initializer for '%s' returned null\n",
-            key.c_str());
+        ENIGMA_LOG(LogModuleManager, Error, "Initializer for '{}' returned null", key);
         if (dllHandle) PlatformFreeDll(dllHandle);
         return nullptr;
     }
@@ -224,11 +223,81 @@ void FModuleManager::LoadAllRegisteredModules()
 // ---------------------------------------------------------------
 void FModuleManager::ScanDllsFromDirectory(const std::string& directory)
 {
-    // Load all DLLs from the directory into the process.
+    // Load DLLs from the directory into the process.
     // This triggers static FModuleInitializerEntry registration
     // but does NOT call StartupModule / initialize modules.
+    //
+    // If a .modules manifest is found for the current TargetName,
+    // only the DLLs listed in the manifest are loaded. This prevents
+    // loading DLLs from a different build configuration (e.g. loading
+    // both Development and DebugGame DLLs from the same directory).
 
 #ifdef _WIN32
+    // --- Phase 1: Try manifest-based loading ---
+    if (!TargetName.empty())
+    {
+        std::string manifestPath = directory;
+        if (!manifestPath.empty() && manifestPath.back() != '\\' && manifestPath.back() != '/')
+            manifestPath += '\\';
+        manifestPath += TargetName + ".modules";
+
+        std::ifstream manifestFile(manifestPath);
+        if (manifestFile.is_open())
+        {
+            ENIGMA_LOG(LogModuleManager, Info, "Loading modules from manifest: {}", manifestPath);
+
+            // Simple line-by-line parsing: extract "xxx.dll" values
+            // from the JSON without a full JSON parser.
+            // Format: "ModuleName": "SomeFile.dll"
+            std::string line;
+            std::vector<std::string> dllNames;
+            while (std::getline(manifestFile, line))
+            {
+                // Look for lines containing .dll"
+                auto dllEnd = line.find(".dll\"");
+                if (dllEnd == std::string::npos)
+                    continue;
+
+                // Walk backwards from .dll" to find the opening quote
+                // of the value: "SomeFile.dll"
+                auto valueEnd = dllEnd + 4; // position after ".dll"
+                // Find the quote before the DLL filename
+                auto valueStart = line.rfind('"', dllEnd - 1);
+                if (valueStart == std::string::npos)
+                    continue;
+
+                std::string dllName = line.substr(valueStart + 1, valueEnd - valueStart - 1);
+                if (!dllName.empty())
+                {
+                    dllNames.push_back(dllName);
+                }
+            }
+            manifestFile.close();
+
+            // Load only the DLLs listed in the manifest
+            for (const auto& dllName : dllNames)
+            {
+                std::string fullPath = directory;
+                if (!fullPath.empty() && fullPath.back() != '\\' && fullPath.back() != '/')
+                    fullPath += '\\';
+                fullPath += dllName;
+
+                void* handle = PlatformLoadDll(fullPath.c_str());
+                if (!handle)
+                {
+                    DWORD err = ::GetLastError();
+                    ENIGMA_LOG(LogModuleManager, Warning,
+                        "Could not load DLL '{}' (GetLastError={})", fullPath, err);
+                }
+            }
+
+            return; // Manifest found and processed -- skip wildcard scan
+        }
+    }
+
+    // --- Phase 2: Fallback to *.dll wildcard scan ---
+    ENIGMA_LOG(LogModuleManager, Info, "No manifest found, scanning *.dll in: {}", directory);
+
     std::string pattern = directory;
     if (!pattern.empty() && pattern.back() != '\\' && pattern.back() != '/')
         pattern += '\\';
@@ -245,7 +314,13 @@ void FModuleManager::ScanDllsFromDirectory(const std::string& directory)
                 fullPath += '\\';
             fullPath += fd.cFileName;
 
-            PlatformLoadDll(fullPath.c_str());
+            void* handle = PlatformLoadDll(fullPath.c_str());
+            if (!handle)
+            {
+                DWORD err = ::GetLastError();
+                ENIGMA_LOG(LogModuleManager, Error,
+                    "Failed to load DLL '{}' (GetLastError={})", fullPath, err);
+            }
         } while (::FindNextFileA(hFind, &fd));
         ::FindClose(hFind);
     }
