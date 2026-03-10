@@ -19,7 +19,8 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 
 ## Features
 
-- Modular architecture: engine, game logic, and plugins run as independent DLL modules with dynamic loading and dependency management
+- Modular architecture: engine, game logic, and plugins run as independent DLL modules with manifest-based DLL loading for multi-configuration isolation, engine plugin auto-discovery, and dependency management
+- Structured logging: category-based `ENIGMA_LOG` macro with compile-time verbosity gating (zero-overhead in Shipping), runtime level control, and automatic stderr/stdout routing
 - Plugin system: plugins defined via `.eplugin` descriptors with loading phase control, auto-discovery, and dependency checking
 - INI config system: UE-style layered config with 4-layer merging (Engine Base → Plugin → Project Default → User), typed getters/setters, array operators, plugin dual-track support
 - Project scaffolding: one-command creation of projects, modules, and plugins with auto-generated template code and configuration

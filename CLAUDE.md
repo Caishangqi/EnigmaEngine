@@ -40,6 +40,10 @@ EnigmaEngine/
 - C++26, Unreal 风格: F 前缀、CORE_API DLL 导出、Allman 大括号、`///` Doxygen、`Enigma` 命名空间
 - 右手 Y-up 坐标系: Forward=(0,0,-1), Up=(0,1,0), Right=(1,0,0)
 - 源文件仅使用 ASCII 字符（MSVC codepage 936 下非 ASCII 会触发 C4819 警告）
+- 日志规范: 使用 `ENIGMA_LOG(Category, Verbosity, Fmt, ...)` 宏，不使用 `std::printf`/`std::fprintf`
+  - 每个 .cpp 文件定义静态分类: `DEFINE_LOG_CATEGORY_STATIC(LogXxx, Info, All)`
+  - 级别: Fatal / Error / Warning / Info / Verbose / Debug
+  - Shipping 构建自动裁剪 Verbose/Debug（零开销）
 
 ## 构建与测试
 - BuildTool: `dotnet build Engine/Source/Programs/BuildTool/BuildTool.sln -c Release`，20 个测试套件
