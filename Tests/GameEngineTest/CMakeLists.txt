@@ -23,6 +23,7 @@ set(ENGINE_PRIVATE "${ENGINE_ROOT}/Engine/Private")
 set(APPCORE_PUBLIC "${ENGINE_ROOT}/ApplicationCore/Public")
 set(APPCORE_PRIVATE "${ENGINE_ROOT}/ApplicationCore/Private")
 set(RENDERCORE_PUBLIC "${ENGINE_ROOT}/RenderCore/Public")
+set(NLOHMANN_JSON_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/ThirdParty/nlohmann_json/include")
 
 # Generated API headers (normally produced by BuildTool)
 set(GENERATED_DIR "${CMAKE_BINARY_DIR}/Generated")
@@ -131,6 +132,7 @@ target_include_directories(Engine PUBLIC
     "${GENERATED_DIR}/Engine/Public"
     "${GENERATED_DIR}/ApplicationCore/Public"
     "${GENERATED_DIR}/RenderCore/Public"
+    PRIVATE "${NLOHMANN_JSON_INCLUDE}"
 )
 target_link_libraries(Engine PUBLIC Core ApplicationCore)
 target_compile_definitions(Engine PRIVATE ENGINE_EXPORTS)

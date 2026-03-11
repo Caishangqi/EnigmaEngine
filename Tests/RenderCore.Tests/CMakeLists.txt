@@ -31,6 +31,7 @@ set(ENGINE_PRIVATE "${ENGINE_ROOT}/Engine/Private")
 set(APPCORE_PUBLIC "${ENGINE_ROOT}/ApplicationCore/Public")
 set(APPCORE_PRIVATE "${ENGINE_ROOT}/ApplicationCore/Private")
 set(GOOGLETEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/ThirdParty/googletest")
+set(NLOHMANN_JSON_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/ThirdParty/nlohmann_json/include")
 
 # ---------------------------------------------------------------------------
 # Generated API headers
@@ -166,6 +167,7 @@ add_library(Engine SHARED
 )
 target_include_directories(Engine
     PUBLIC "${ENGINE_PUBLIC}" "${GENERATED_DIR}"
+    PRIVATE "${NLOHMANN_JSON_INCLUDE}"
 )
 target_compile_definitions(Engine PRIVATE ENGINE_EXPORTS)
 target_link_libraries(Engine PUBLIC Core ApplicationCore RenderCore)
