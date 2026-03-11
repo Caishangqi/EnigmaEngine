@@ -13,5 +13,7 @@ public class Engine : ModuleRules
         PublicDependencyModuleNames.Add("Core");
         PublicDependencyModuleNames.Add("ApplicationCore");
         PublicDependencyModuleNames.Add("RenderCore");
+
+        PrivateDependencyModuleNames.Add("nlohmann_json");
     }
 }

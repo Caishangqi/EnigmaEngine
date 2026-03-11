@@ -11,7 +11,10 @@
 
 #include "Logging/LogMacros.h"
 
+#include <nlohmann/json.hpp>
+
 #include <filesystem>
+#include <fstream>
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -22,6 +25,229 @@ namespace Enigma
 {
 
 DEFINE_LOG_CATEGORY_STATIC(LogInit, Info, All);
+
+// ---------------------------------------------------------------
+// Plugin descriptor helpers (file-local)
+// ---------------------------------------------------------------
+
+/// Map a LoadingPhase string from .eplugin/.eproject to the enum.
+static ELoadingPhase ParseLoadingPhase(const std::string& str)
+{
+    if (str == "EarliestPossible") return ELoadingPhase::EarliestPossible;
+    if (str == "PostConfigInit")   return ELoadingPhase::PostConfigInit;
+    if (str == "PreLoadingScreen") return ELoadingPhase::PreLoadingScreen;
+    if (str == "Default")          return ELoadingPhase::Default;
+    if (str == "PostEngineInit")   return ELoadingPhase::PostEngineInit;
+    if (str == "None")             return ELoadingPhase::None;
+    return ELoadingPhase::PostEngineInit; // safe default for plugins
+}
+
+/// Module info extracted from a descriptor.
+struct FDescriptorModuleEntry
+{
+    std::string   Name;
+    ELoadingPhase Phase = ELoadingPhase::PostEngineInit;
+};
+
+/// Info about an enabled plugin discovered from descriptors.
+struct FDiscoveredPlugin
+{
+    std::string PluginName;
+    std::string PluginRoot;   // directory containing .eplugin
+    std::vector<FDescriptorModuleEntry> Modules;
+};
+
+/// Find the first .eproject file in the given directory and parse
+/// the enabled plugin names from it.
+/// Returns {projectModules, enabledPluginNames}.
+static std::pair<std::vector<FDescriptorModuleEntry>, std::vector<std::string>>
+ParseEProject(const std::filesystem::path& projectRoot)
+{
+    std::vector<FDescriptorModuleEntry> modules;
+    std::vector<std::string> enabledPlugins;
+
+    // Find *.eproject
+    std::filesystem::path eprojectPath;
+    for (const auto& entry : std::filesystem::directory_iterator(projectRoot))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".eproject")
+        {
+            eprojectPath = entry.path();
+            break;
+        }
+    }
+
+    if (eprojectPath.empty())
+    {
+        ENIGMA_LOG(LogInit, Warning, "No .eproject found in '{}'",
+            projectRoot.string());
+        return {modules, enabledPlugins};
+    }
+
+    // Parse JSON
+    std::ifstream file(eprojectPath);
+    if (!file.is_open())
+    {
+        ENIGMA_LOG(LogInit, Error, "Failed to open '{}'", eprojectPath.string());
+        return {modules, enabledPlugins};
+    }
+
+    nlohmann::json doc;
+    try
+    {
+        doc = nlohmann::json::parse(file);
+    }
+    catch (const nlohmann::json::parse_error& e)
+    {
+        ENIGMA_LOG(LogInit, Error, "JSON parse error in '{}': {}",
+            eprojectPath.string(), e.what());
+        return {modules, enabledPlugins};
+    }
+
+    ENIGMA_LOG(LogInit, Info, "Parsed project descriptor: {}",
+        eprojectPath.string());
+
+    // Extract Modules[]
+    if (doc.contains("Modules") && doc["Modules"].is_array())
+    {
+        for (const auto& m : doc["Modules"])
+        {
+            FDescriptorModuleEntry entry;
+            entry.Name  = m.value("Name", "");
+            entry.Phase = ParseLoadingPhase(m.value("LoadingPhase", "Default"));
+            if (!entry.Name.empty())
+            {
+                modules.push_back(std::move(entry));
+            }
+        }
+    }
+
+    // Extract Plugins[] — only enabled ones
+    if (doc.contains("Plugins") && doc["Plugins"].is_array())
+    {
+        for (const auto& p : doc["Plugins"])
+        {
+            bool enabled = p.value("Enabled", false);
+            std::string name = p.value("Name", "");
+            if (enabled && !name.empty())
+            {
+                enabledPlugins.push_back(std::move(name));
+            }
+        }
+    }
+
+    return {modules, enabledPlugins};
+}
+
+/// Parse a .eplugin file and return its module entries.
+static std::vector<FDescriptorModuleEntry>
+ParseEPlugin(const std::filesystem::path& epluginPath)
+{
+    std::vector<FDescriptorModuleEntry> modules;
+
+    std::ifstream file(epluginPath);
+    if (!file.is_open())
+    {
+        ENIGMA_LOG(LogInit, Error, "Failed to open '{}'", epluginPath.string());
+        return modules;
+    }
+
+    nlohmann::json doc;
+    try
+    {
+        doc = nlohmann::json::parse(file);
+    }
+    catch (const nlohmann::json::parse_error& e)
+    {
+        ENIGMA_LOG(LogInit, Error, "JSON parse error in '{}': {}",
+            epluginPath.string(), e.what());
+        return modules;
+    }
+
+    if (doc.contains("Modules") && doc["Modules"].is_array())
+    {
+        for (const auto& m : doc["Modules"])
+        {
+            FDescriptorModuleEntry entry;
+            entry.Name  = m.value("Name", "");
+            entry.Phase = ParseLoadingPhase(m.value("LoadingPhase", "PostEngineInit"));
+            if (!entry.Name.empty())
+            {
+                modules.push_back(std::move(entry));
+            }
+        }
+    }
+
+    return modules;
+}
+
+/// Search for a plugin by name in the given Plugins/ directory.
+/// Returns the plugin root directory (containing .eplugin), or empty.
+static std::filesystem::path
+FindPluginDir(const std::filesystem::path& pluginsDir, const std::string& pluginName)
+{
+    std::filesystem::path candidate = pluginsDir / pluginName;
+    if (!std::filesystem::exists(candidate) || !std::filesystem::is_directory(candidate))
+        return {};
+
+    // Verify .eplugin exists
+    std::filesystem::path eplugin = candidate / (pluginName + ".eplugin");
+    if (std::filesystem::exists(eplugin))
+        return candidate;
+
+    return {};
+}
+
+/// Discover all enabled plugins from .eproject, parse their .eplugin
+/// descriptors, and return structured plugin info.
+static std::vector<FDiscoveredPlugin>
+DiscoverPlugins(
+    const std::filesystem::path& projectRoot,
+    const std::filesystem::path& engineRoot)
+{
+    std::vector<FDiscoveredPlugin> result;
+
+    auto [projectModules, enabledPluginNames] = ParseEProject(projectRoot);
+
+    // Plugin search directories: project first, then engine
+    std::filesystem::path projectPluginsDir = projectRoot / "Plugins";
+    std::filesystem::path enginePluginsDir  = engineRoot / "Plugins";
+
+    for (const auto& pluginName : enabledPluginNames)
+    {
+        // Search project plugins first, then engine plugins
+        std::filesystem::path pluginDir = FindPluginDir(projectPluginsDir, pluginName);
+        if (pluginDir.empty())
+        {
+            pluginDir = FindPluginDir(enginePluginsDir, pluginName);
+        }
+
+        if (pluginDir.empty())
+        {
+            ENIGMA_LOG(LogInit, Warning,
+                "Plugin '{}' is enabled in .eproject but not found in project or engine Plugins/",
+                pluginName);
+            continue;
+        }
+
+        // Parse .eplugin
+        std::filesystem::path epluginPath = pluginDir / (pluginName + ".eplugin");
+        auto modules = ParseEPlugin(epluginPath);
+
+        FDiscoveredPlugin plugin;
+        plugin.PluginName = pluginName;
+        plugin.PluginRoot = std::filesystem::canonical(pluginDir).string();
+        plugin.Modules    = std::move(modules);
+
+        ENIGMA_LOG(LogInit, Info, "Discovered plugin '{}' at '{}' ({} module(s))",
+            plugin.PluginName, plugin.PluginRoot,
+            plugin.Modules.size());
+
+        result.push_back(std::move(plugin));
+    }
+
+    return result;
+}
 
 // ---------------------------------------------------------------
 // RequestExit / IsExitRequested -- delegate to Core globals
@@ -281,51 +507,48 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
                     FModuleManager::Get().AddDllSearchPath(gameBinStr);
                     ENIGMA_LOG(LogInit, Info, "Game DLL search path: {}", gameBinStr);
                 }
-
-                // Register plugin DLL search paths: {ProjectDir}/Plugins/*/Binaries/{Platform}/
-                std::filesystem::path pluginsDir = std::filesystem::path(dir) / "Plugins";
-                if (std::filesystem::exists(pluginsDir) && std::filesystem::is_directory(pluginsDir))
-                {
-                    for (const auto& entry : std::filesystem::directory_iterator(pluginsDir))
-                    {
-                        if (!entry.is_directory()) continue;
-                        std::filesystem::path pluginBin = entry.path() / "Binaries" / "Win64";
-                        if (std::filesystem::exists(pluginBin))
-                        {
-                            std::string pluginBinStr = std::filesystem::canonical(pluginBin).string();
-                            FModuleManager::Get().AddDllSearchPath(pluginBinStr);
-                            ENIGMA_LOG(LogInit, Info, "Plugin DLL search path: {}", pluginBinStr);
-                        }
-                    }
-                }
 #endif
             }
         }
 
-        // --- Engine plugin DLL search paths ---
-        // Derive engine root from engineConfigDir: {EngineRoot}/Engine/Config -> {EngineRoot}/Engine
-        // Then scan {EngineRoot}/Engine/Plugins/*/Binaries/{Platform}/
-        if (!engineConfigDir.empty())
+        // --- Descriptor-driven plugin discovery ---
+        // Parse .eproject to find enabled plugins, then parse each .eplugin
+        // to discover modules and their loading phases.
+        if (!projectConfigDir.empty() && !engineConfigDir.empty())
         {
-#ifdef _WIN32
-            std::filesystem::path enginePluginsDir =
-                std::filesystem::path(engineConfigDir).parent_path() / "Plugins";
-            if (std::filesystem::exists(enginePluginsDir) && std::filesystem::is_directory(enginePluginsDir))
+            std::filesystem::path projectRoot =
+                std::filesystem::path(projectConfigDir).parent_path();
+            // engineConfigDir = {EngineRoot}/Engine/Config → parent = {EngineRoot}/Engine
+            std::filesystem::path engineDir =
+                std::filesystem::path(engineConfigDir).parent_path();
+
+            auto plugins = DiscoverPlugins(projectRoot, engineDir);
+
+            for (const auto& plugin : plugins)
             {
-                for (const auto& entry : std::filesystem::directory_iterator(enginePluginsDir))
+                // Add plugin Binaries/ to DLL search path
+#ifdef _WIN32
+                std::filesystem::path pluginBin =
+                    std::filesystem::path(plugin.PluginRoot) / "Binaries" / "Win64";
+                if (std::filesystem::exists(pluginBin))
                 {
-                    if (!entry.is_directory()) continue;
-                    std::filesystem::path pluginBin = entry.path() / "Binaries" / "Win64";
-                    if (std::filesystem::exists(pluginBin))
-                    {
-                        std::string pluginBinStr = std::filesystem::canonical(pluginBin).string();
-                        FModuleManager::Get().AddDllSearchPath(pluginBinStr);
-                        ENIGMA_LOG(LogInit, Info, "Engine plugin DLL search path: {}",
-                            pluginBinStr);
-                    }
+                    std::string pluginBinStr = std::filesystem::canonical(pluginBin).string();
+                    FModuleManager::Get().AddDllSearchPath(pluginBinStr);
+                    ENIGMA_LOG(LogInit, Info, "Plugin '{}' DLL search path: {}",
+                        plugin.PluginName, pluginBinStr);
+                }
+#endif
+
+                // Register each module to its declared loading phase
+                for (const auto& mod : plugin.Modules)
+                {
+                    AddModuleToPhase(mod.Phase, mod.Name);
+                    ENIGMA_LOG(LogInit, Info,
+                        "Plugin '{}': registered module '{}' for phase {}",
+                        plugin.PluginName, mod.Name,
+                        static_cast<int>(mod.Phase));
                 }
             }
-#endif
         }
     }
 
