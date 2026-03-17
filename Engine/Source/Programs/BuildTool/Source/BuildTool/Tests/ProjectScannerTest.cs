@@ -29,7 +29,7 @@ public static class ProjectScannerTest
         Console.WriteLine("[Test 1] AllModules contains all expected modules");
         var scan = ScanEnigmaArcade();
 
-        string[] expected = ["Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature", "nlohmann_json"];
+        string[] expected = ["Core", "Engine", "Launch", "EnigmaArcade", "ArcadeFeature", "nlohmann_json"];
         foreach (var name in expected)
         {
             Assert(scan.AllModules.ContainsKey(name), $"Missing module: {name}");

@@ -50,7 +50,6 @@ public static class SolutionGeneratorTest
         var gameModules = new Dictionary<string, ModuleRules>
         {
             ["EnigmaArcade"] = new() { ModuleName = "EnigmaArcade", ModuleDirectory = Path.Combine(tempDir, "EnigmaArcade", "Source", "EnigmaArcade") },
-            ["ArcadeGameplay"] = new() { ModuleName = "ArcadeGameplay", ModuleDirectory = Path.Combine(tempDir, "EnigmaArcade", "Source", "ArcadeGameplay") },
         };
 
         var pluginModules = new Dictionary<string, ModuleRules>
@@ -66,7 +65,6 @@ public static class SolutionGeneratorTest
             ["Engine"] = ["Core"],
             ["Launch"] = ["Engine", "Core"],
             ["EnigmaArcade"] = ["Engine", "Core"],
-            ["ArcadeGameplay"] = ["Engine", "Core"],
             ["ArcadeFeature"] = ["Engine", "Core"],
             ["EnhancedInput"] = ["Engine", "Core"],
         };
@@ -74,7 +72,7 @@ public static class SolutionGeneratorTest
         var resolveResult = new DependencyResolver.ResolveResult
         {
             Success = true,
-            BuildOrder = ["Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature", "EnhancedInput"],
+            BuildOrder = ["Core", "Engine", "Launch", "EnigmaArcade", "ArcadeFeature", "EnhancedInput"],
             AdjacencyList = adjacency,
         };
 
@@ -165,7 +163,7 @@ public static class SolutionGeneratorTest
             Assert(result.Success, $"Generate failed: {result.Error}");
             string content = File.ReadAllText(result.OutputPath);
             string cppGuid = "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}";
-            foreach (var name in new[] { "Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature", "EnhancedInput" })
+            foreach (var name in new[] { "Core", "Engine", "Launch", "EnigmaArcade", "ArcadeFeature", "EnhancedInput" })
                 Assert(content.Contains($"Project(\"{cppGuid}\") = \"{name}\""), $"Missing C++ project: {name}");
             Console.WriteLine("  PASSED");
         }

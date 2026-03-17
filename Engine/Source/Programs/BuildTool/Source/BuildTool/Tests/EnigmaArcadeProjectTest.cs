@@ -47,7 +47,6 @@ public static class EnigmaArcadeProjectTest
         TestEproject(projectRoot);
         TestTargetCs(projectRoot);
         TestPrimaryModule(projectRoot);
-        TestGameplayModule(projectRoot);
         TestPlugin(projectRoot);
         TestDirectoryStructure(projectRoot);
         TestCppSourceFiles(projectRoot);
@@ -87,18 +86,18 @@ public static class EnigmaArcadeProjectTest
         Check(project.FileVersion == 1,
             $"[2]  FileVersion = {project.FileVersion} (expected 1)");
 
-        Check(project.Modules.Count == 2,
-            $"[3]  Module count = {project.Modules.Count} (expected 2)");
-        if (project.Modules.Count >= 2)
+        Check(project.Modules.Count == 1,
+            $"[3]  Module count = {project.Modules.Count} (expected 1)");
+        if (project.Modules.Count >= 1)
         {
             Check(project.Modules[0].Name == "EnigmaArcade",
                 $"     First module = {project.Modules[0].Name} (REQ-018: primary module first)");
-            Check(project.Modules[1].Name == "ArcadeGameplay",
-                $"     Second module = {project.Modules[1].Name}");
         }
 
-        Check(project.Plugins.Count == 1 && project.Plugins[0].Name == "ArcadeFeature" && project.Plugins[0].Enabled,
-            $"[4]  Plugin: ArcadeFeature (Enabled=true)");
+        Check(project.Plugins.Count == 2
+              && project.Plugins[0].Name == "ArcadeFeature" && project.Plugins[0].Enabled
+              && project.Plugins[1].Name == "EnhancedInput" && project.Plugins[1].Enabled,
+            $"[4]  Plugins: ArcadeFeature + EnhancedInput (both Enabled=true)");
     }
 
     // ── .Target.cs ────────────────────────────────────────────
@@ -128,7 +127,7 @@ public static class EnigmaArcadeProjectTest
             $"[7]  ExtraModuleNames[0] = {(target.ExtraModuleNames.Count > 0 ? target.ExtraModuleNames[0] : "N/A")} (REQ-018: primary first)");
 
         Check(target.ExtraModuleNames.Count >= 2
-              && target.ExtraModuleNames[1] == "ArcadeGameplay",
+              && target.ExtraModuleNames[1] == "AsciiRenderer",
             $"[8]  ExtraModuleNames[1] = {(target.ExtraModuleNames.Count > 1 ? target.ExtraModuleNames[1] : "N/A")}");
     }
 
@@ -157,33 +156,6 @@ public static class EnigmaArcadeProjectTest
         Check(module.PublicDependencyModuleNames.Contains("Core")
               && module.PublicDependencyModuleNames.Contains("Engine"),
             "[11] Public deps include Core + Engine");
-    }
-
-    // ── ArcadeGameplay.Build.cs ───────────────────────────────
-
-    private static void TestGameplayModule(string projectRoot)
-    {
-        Console.WriteLine("\n--- ArcadeGameplay.Build.cs ---");
-
-        var path = Path.Combine(projectRoot, "Source", "ArcadeGameplay", "ArcadeGameplay.Build.cs");
-        ModuleRules module;
-        try
-        {
-            module = ModuleParser.Parse(path);
-            Check(true, "[12] ArcadeGameplay.Build.cs parses successfully");
-        }
-        catch (Exception ex)
-        {
-            Check(false, $"[12] ArcadeGameplay.Build.cs parses successfully ({ex.Message})");
-            return;
-        }
-
-        Check(module.PublicDependencyModuleNames.Contains("Core")
-              && module.PublicDependencyModuleNames.Contains("Engine"),
-            "[13] Public deps include Core + Engine");
-
-        Check(module.PrivateDependencyModuleNames.Count == 0,
-            "[14] ArcadeGameplay has no private dependencies (standalone gameplay module)");
     }
 
     // ── ArcadeFeature plugin ──────────────────────────────────
@@ -240,7 +212,6 @@ public static class EnigmaArcadeProjectTest
             "EnigmaArcade.eproject",
             "Source/EnigmaArcade.Target.cs",
             "Source/EnigmaArcade/EnigmaArcade.Build.cs",
-            "Source/ArcadeGameplay/ArcadeGameplay.Build.cs",
             "Plugins/ArcadeFeature/ArcadeFeature.eplugin",
             "Plugins/ArcadeFeature/Source/ArcadeFeature/ArcadeFeature.Build.cs",
         };
@@ -261,8 +232,6 @@ public static class EnigmaArcadeProjectTest
         {
             "Source/EnigmaArcade/Public",
             "Source/EnigmaArcade/Private",
-            "Source/ArcadeGameplay/Public",
-            "Source/ArcadeGameplay/Private",
             "Plugins/ArcadeFeature/Source/ArcadeFeature/Public",
             "Plugins/ArcadeFeature/Source/ArcadeFeature/Private",
         };
@@ -306,37 +275,20 @@ public static class EnigmaArcadeProjectTest
         }
         Check(allExist, "[21] EnigmaArcade C++ source files present");
 
-        // [22] ArcadeGameplay module C++ files
-        var gameplayCppFiles = new[]
-        {
-            "Source/ArcadeGameplay/Public/ArcadeGameplayModule.h",
-            "Source/ArcadeGameplay/Private/ArcadeGameplayModule.cpp",
-        };
-        allExist = true;
-        foreach (var rel in gameplayCppFiles)
-        {
-            var full = Path.Combine(projectRoot, rel.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(full))
-            {
-                Console.WriteLine($"     MISSING: {rel}");
-                allExist = false;
-            }
-        }
-        Check(allExist, "[22] ArcadeGameplay C++ source files present");
-
         // [23] IMPLEMENT_PRIMARY_GAME_MODULE macro used in EnigmaArcade
         var enigmaModuleCpp = File.ReadAllText(
             Path.Combine(projectRoot, "Source", "EnigmaArcade", "Private", "EnigmaArcadeModule.cpp"));
         Check(enigmaModuleCpp.Contains("IMPLEMENT_PRIMARY_GAME_MODULE"),
             "[23] EnigmaArcade uses IMPLEMENT_PRIMARY_GAME_MODULE macro");
 
-        // [24] FArcadeGameInstance extends FGameInstance and has tick counter
+        // [24] FArcadeGameInstance extends FGameInstance and uses component-based architecture
         var gameInstanceH = File.ReadAllText(
             Path.Combine(projectRoot, "Source", "EnigmaArcade", "Public", "ArcadeGameInstance.h"));
         Check(gameInstanceH.Contains("FGameInstance")
               && gameInstanceH.Contains("ENIGMAARCADE_API")
-              && gameInstanceH.Contains("TickCount"),
-            "[24] FArcadeGameInstance: extends FGameInstance, exported, has TickCount");
+              && gameInstanceH.Contains("FGameObject")
+              && gameInstanceH.Contains("FAsciiSpriteComponent"),
+            "[24] FArcadeGameInstance: extends FGameInstance, exported, uses FGameObject + FAsciiSpriteComponent");
     }
 
     // ── ArcadeFeature plugin C++ files ─────────────────────────
@@ -397,21 +349,20 @@ public static class EnigmaArcadeProjectTest
         Check(buildCs.PrivateDependencyModuleNames.Contains("nlohmann_json"),
             "[33] EnigmaArcade.Build.cs has nlohmann_json as private dependency");
 
-        // [34] ArcadeGameInstance.cpp includes nlohmann/json.hpp
+        // [34] ArcadeGameInstance.cpp uses component-based architecture
         var gameInstanceCpp = File.ReadAllText(
             Path.Combine(projectRoot, "Source", "EnigmaArcade", "Private", "ArcadeGameInstance.cpp"));
-        Check(gameInstanceCpp.Contains("#include <nlohmann/json.hpp>"),
-            "[34] ArcadeGameInstance.cpp includes <nlohmann/json.hpp>");
+        Check(gameInstanceCpp.Contains("#include \"GameFramework/GameObject.h\""),
+            "[34] ArcadeGameInstance.cpp includes GameFramework/GameObject.h");
 
-        // [35] Source creates JSON config with game name and version
-        Check(gameInstanceCpp.Contains("\"game\"") && gameInstanceCpp.Contains("\"EnigmaArcade\"")
-              && gameInstanceCpp.Contains("\"version\""),
-            "[35] Init() creates JSON with game name and version fields");
+        // [35] Source creates FGameObject and adds FAsciiSpriteComponent
+        Check(gameInstanceCpp.Contains("CreateGameObject") && gameInstanceCpp.Contains("AddComponent"),
+            "[35] Init() creates FGameObject and adds component");
 
-        // [36] Output format matches REQ-014: Config logged via ENIGMA_LOG with json dump
-        Check(gameInstanceCpp.Contains("\"Config: {}\"")
-              && gameInstanceCpp.Contains("config.dump()"),
-            "[36] Output format: Config: <json> via ENIGMA_LOG (REQ-014)");
+        // [36] Output format: ArcadeGameInstance initialized via ENIGMA_LOG
+        Check(gameInstanceCpp.Contains("ENIGMA_LOG")
+              && gameInstanceCpp.Contains("ArcadeGameInstance initialized"),
+            "[36] Output: ArcadeGameInstance initialized via ENIGMA_LOG");
     }
 
     // ── BuildTool pipeline ────────────────────────────────────
@@ -423,8 +374,6 @@ public static class EnigmaArcadeProjectTest
         // Parse all modules
         var enigmaRules = ModuleParser.Parse(
             Path.Combine(projectRoot, "Source", "EnigmaArcade", "EnigmaArcade.Build.cs"));
-        var gameplayRules = ModuleParser.Parse(
-            Path.Combine(projectRoot, "Source", "ArcadeGameplay", "ArcadeGameplay.Build.cs"));
         var target = TargetParser.Parse(
             Path.Combine(projectRoot, "Source", "EnigmaArcade.Target.cs"));
 
@@ -434,7 +383,6 @@ public static class EnigmaArcadeProjectTest
             ["Core"] = new() { ModuleName = "Core" },
             ["Engine"] = new() { ModuleName = "Engine", PublicDependencyModuleNames = { "Core" } },
             [enigmaRules.ModuleName] = enigmaRules,
-            [gameplayRules.ModuleName] = gameplayRules,
         };
 
         // [25] Dependency resolution
@@ -443,17 +391,16 @@ public static class EnigmaArcadeProjectTest
         Check(resolveResult.Success,
             $"[25] Dependency resolution succeeds (order: [{string.Join(", ", resolveResult.BuildOrder)}])");
 
-        // [26] Build order: Core → Engine → ArcadeGameplay → EnigmaArcade
+        // [26] Build order: Core → Engine → EnigmaArcade
         if (resolveResult.Success)
         {
             var order = resolveResult.BuildOrder.ToList();
             var coreIdx = order.IndexOf("Core");
             var engineIdx = order.IndexOf("Engine");
             var enigmaIdx = order.IndexOf("EnigmaArcade");
-            var gameplayIdx = order.IndexOf("ArcadeGameplay");
 
-            Check(coreIdx < engineIdx && engineIdx < gameplayIdx && gameplayIdx < enigmaIdx,
-                "[26] Build order: Core < Engine < ArcadeGameplay < EnigmaArcade");
+            Check(coreIdx < engineIdx && engineIdx < enigmaIdx,
+                "[26] Build order: Core < Engine < EnigmaArcade");
         }
 
         // [27] CMake generation
@@ -467,16 +414,10 @@ public static class EnigmaArcadeProjectTest
             var cmake = genResult.Content;
             var hasEnigmaTarget = cmake.Contains("add_executable(EnigmaArcade")
                                   || cmake.Contains("add_library(EnigmaArcade");
-            var hasGameplayTarget = cmake.Contains("add_executable(ArcadeGameplay")
-                                    || cmake.Contains("add_library(ArcadeGameplay");
             var hasEnigmaExports = cmake.Contains("ENIGMAARCADE_EXPORTS");
-            var hasGameplayExports = cmake.Contains("ARCADEGAMEPLAY_EXPORTS");
-            var linksGameplay = cmake.Contains("target_link_libraries(EnigmaArcade")
-                                && cmake.Contains("ArcadeGameplay");
 
-            Check(hasEnigmaTarget && hasGameplayTarget
-                  && hasEnigmaExports && hasGameplayExports && linksGameplay,
-                "[28] CMake: both targets, EXPORTS macros, EnigmaArcade links ArcadeGameplay");
+            Check(hasEnigmaTarget && hasEnigmaExports,
+                "[28] CMake: EnigmaArcade target with EXPORTS macro");
         }
     }
 
@@ -507,7 +448,6 @@ public static class EnigmaArcadeProjectTest
         {
             // Development: executables present, no platform-config suffix in OUTPUT_NAME
             Check(devResult.Content.Contains("add_executable(EnigmaArcade")
-                  && devResult.Content.Contains("add_executable(ArcadeGameplay")
                   && !devResult.Content.Contains("-Win64-Development"),
                 "[40] Development: executable targets, no platform-config suffix");
         }
@@ -603,20 +543,17 @@ public static class EnigmaArcadeProjectTest
         Console.WriteLine("\n--- Runtime Output Format (REQ-013) ---");
 
         // Validate expected output lines exist in source files
-        // [49] Engine Initialized message
+        // [49] ArcadeGameInstance initialized message
         var gameInstanceCpp = File.ReadAllText(
             Path.Combine(projectRoot, "Source", "EnigmaArcade", "Private", "ArcadeGameInstance.cpp"));
-        Check(gameInstanceCpp.Contains("Engine Initialized"),
-            "[49] FArcadeGameInstance outputs 'Engine Initialized' via ENIGMA_LOG");
+        Check(gameInstanceCpp.Contains("ArcadeGameInstance initialized"),
+            "[49] FArcadeGameInstance outputs 'ArcadeGameInstance initialized' via ENIGMA_LOG");
 
         // [50] Module registration macros
         var enigmaModuleCpp = File.ReadAllText(
             Path.Combine(projectRoot, "Source", "EnigmaArcade", "Private", "EnigmaArcadeModule.cpp"));
-        var gameplayModuleCpp = File.ReadAllText(
-            Path.Combine(projectRoot, "Source", "ArcadeGameplay", "Private", "ArcadeGameplayModule.cpp"));
-        Check(enigmaModuleCpp.Contains("IMPLEMENT_PRIMARY_GAME_MODULE")
-              && gameplayModuleCpp.Contains("[ArcadeGameplay] StartupModule"),
-            "[50] Primary module uses IMPLEMENT_PRIMARY_GAME_MODULE, gameplay module logs StartupModule");
+        Check(enigmaModuleCpp.Contains("IMPLEMENT_PRIMARY_GAME_MODULE"),
+            "[50] Primary module uses IMPLEMENT_PRIMARY_GAME_MODULE");
 
         // [51] Plugin loading message
         var pluginModuleCpp = File.ReadAllText(
@@ -625,10 +562,10 @@ public static class EnigmaArcadeProjectTest
         Check(pluginModuleCpp.Contains("[ArcadeFeature] Plugin loaded at PostEngineInit"),
             "[51] Plugin outputs '[ArcadeFeature] Plugin loaded at PostEngineInit'");
 
-        // [52] Frame counter output (via ENIGMA_LOG, uses TickCount)
-        Check(gameInstanceCpp.Contains("Frame: ")
-              && gameInstanceCpp.Contains("TickCount"),
-            "[52] Render outputs frame counter with TickCount");
+        // [52] Component-based architecture (uses FGameObject + AddComponent)
+        Check(gameInstanceCpp.Contains("CreateGameObject")
+              && gameInstanceCpp.Contains("AddComponent"),
+            "[52] Init uses CreateGameObject and AddComponent (component-based architecture)");
     }
 
     // ── Full module graph builder (shared by multi-config tests) ──
@@ -641,8 +578,6 @@ public static class EnigmaArcadeProjectTest
 
         var enigmaRules = ModuleParser.Parse(
             Path.Combine(projectRoot, "Source", "EnigmaArcade", "EnigmaArcade.Build.cs"));
-        var gameplayRules = ModuleParser.Parse(
-            Path.Combine(projectRoot, "Source", "ArcadeGameplay", "ArcadeGameplay.Build.cs"));
         var target = TargetParser.Parse(
             Path.Combine(projectRoot, "Source", "EnigmaArcade.Target.cs"));
 
@@ -655,7 +590,6 @@ public static class EnigmaArcadeProjectTest
             ["Core"] = new() { ModuleName = "Core" },
             ["Engine"] = new() { ModuleName = "Engine", PublicDependencyModuleNames = { "Core" } },
             [enigmaRules.ModuleName] = enigmaRules,
-            [gameplayRules.ModuleName] = gameplayRules,
         };
 
         // Merge ThirdParty modules

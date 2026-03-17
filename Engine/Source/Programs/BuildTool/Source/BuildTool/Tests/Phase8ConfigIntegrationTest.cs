@@ -92,9 +92,9 @@ public static class Phase8ConfigIntegrationTest
                 ModuleName = "Engine",
                 PublicDependencyModuleNames = { "Core" },
             },
-            ["ArcadeGameplay"] = new()
+            ["EnigmaArcade"] = new()
             {
-                ModuleName = "ArcadeGameplay",
+                ModuleName = "EnigmaArcade",
                 PublicDependencyModuleNames = { "Engine" },
                 PrivateDependencyModuleNames = { "nlohmann_json" },
             },
@@ -117,7 +117,7 @@ public static class Phase8ConfigIntegrationTest
         {
             TargetName = "EnigmaArcade",
             Type = TargetType.Game,
-            ExtraModuleNames = { "ArcadeGameplay" },
+            ExtraModuleNames = { "EnigmaArcade" },
         };
 
         var pluginResult = new PluginScanner.ScanResult

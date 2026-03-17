@@ -64,7 +64,7 @@ public static class GenerateProjectFilesCommandTest
 
         // Game modules → Project/Intermediate/ProjectFiles/
         string gameIntermediateDir = Path.Combine(projectRoot, "Intermediate", "ProjectFiles");
-        foreach (var module in new[] { "EnigmaArcade", "ArcadeGameplay" })
+        foreach (var module in new[] { "EnigmaArcade" })
         {
             string vcxproj = Path.Combine(gameIntermediateDir, $"{module}.vcxproj");
             Assert(File.Exists(vcxproj), $".vcxproj not found: {vcxproj}");
@@ -157,7 +157,7 @@ public static class GenerateProjectFilesCommandTest
 
         // C++ projects
         string cppGuid = "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}";
-        foreach (var name in new[] { "Core", "Engine", "Launch", "EnigmaArcade", "ArcadeGameplay", "ArcadeFeature" })
+        foreach (var name in new[] { "Core", "Engine", "Launch", "EnigmaArcade", "ArcadeFeature" })
             Assert(content.Contains($"Project(\"{cppGuid}\") = \"{name}\""), $"Missing C++ project: {name}");
 
         // 4 solution configurations

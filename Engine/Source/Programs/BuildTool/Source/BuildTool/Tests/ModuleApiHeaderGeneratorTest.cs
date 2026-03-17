@@ -111,17 +111,17 @@ public static class ModuleApiHeaderGeneratorTest
     /// </summary>
     private static void TestMacroCaseConversion()
     {
-        Console.WriteLine("[Test 3] Macro case conversion: ArcadeGameplay -> ARCADEGAMEPLAY");
+        Console.WriteLine("[Test 3] Macro case conversion: GameLogic -> GAMELOGIC");
 
         string projectRoot = CreateTempProjectRoot();
-        string moduleDir = CreateTempModuleDir("ArcadeGameplay");
+        string moduleDir = CreateTempModuleDir("GameLogic");
         try
         {
             var modules = new Dictionary<string, ModuleRules>
             {
-                ["ArcadeGameplay"] = new()
+                ["GameLogic"] = new()
                 {
-                    ModuleName = "ArcadeGameplay",
+                    ModuleName = "GameLogic",
                     ModuleDirectory = moduleDir,
                 },
             };
@@ -132,9 +132,9 @@ public static class ModuleApiHeaderGeneratorTest
             Assert(result.Success, $"Expected success, got error: {result.Error}");
 
             string content = File.ReadAllText(
-                Path.Combine(projectRoot, "Intermediate", "Generated", "ArcadeGameplayAPI.generated.h"));
-            Assert(content.Contains("ARCADEGAMEPLAY_EXPORTS"), "Missing ARCADEGAMEPLAY_EXPORTS");
-            Assert(content.Contains("ARCADEGAMEPLAY_API"), "Missing ARCADEGAMEPLAY_API");
+                Path.Combine(projectRoot, "Intermediate", "Generated", "GameLogicAPI.generated.h"));
+            Assert(content.Contains("GAMELOGIC_EXPORTS"), "Missing GAMELOGIC_EXPORTS");
+            Assert(content.Contains("GAMELOGIC_API"), "Missing GAMELOGIC_API");
 
             Console.WriteLine("  PASSED");
         }

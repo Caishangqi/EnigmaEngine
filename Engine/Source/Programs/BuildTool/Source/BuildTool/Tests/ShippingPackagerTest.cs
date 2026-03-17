@@ -373,7 +373,7 @@ public static class ShippingPackagerTest
         {
             ["Core"] = new() { ModuleName = "Core" },
             ["Engine"] = new() { ModuleName = "Engine" },
-            ["ArcadeGameplay"] = new() { ModuleName = "ArcadeGameplay" },
+            ["EnigmaArcade"] = new() { ModuleName = "EnigmaArcade" },
             ["nlohmann_json"] = new() { ModuleName = "nlohmann_json", IsHeaderOnly = true },
             ["Rewind"] = new() { ModuleName = "Rewind" },
         };
@@ -528,7 +528,7 @@ public static class ShippingPackagerTest
         {
             ["Core"] = new() { ModuleName = "Core" },
             ["Engine"] = new() { ModuleName = "Engine" },
-            ["ArcadeGameplay"] = new() { ModuleName = "ArcadeGameplay" },
+            ["EnigmaArcade"] = new() { ModuleName = "EnigmaArcade" },
         };
         var engineSet = new HashSet<string>(StringComparer.Ordinal) { "Core", "Engine" };
         var plan = new ShippingPackager().GeneratePlan("EnigmaArcade", modules,
@@ -574,7 +574,7 @@ public static class ShippingPackagerTest
         {
             ["Core"] = new() { ModuleName = "Core" },
             ["Engine"] = new() { ModuleName = "Engine" },
-            ["ArcadeGameplay"] = new() { ModuleName = "ArcadeGameplay" },
+            ["EnigmaArcade"] = new() { ModuleName = "EnigmaArcade" },
             ["ArcadeFeature"] = new() { ModuleName = "ArcadeFeature" },
         };
         var engineSet = new HashSet<string>(StringComparer.Ordinal) { "Core", "Engine" };
