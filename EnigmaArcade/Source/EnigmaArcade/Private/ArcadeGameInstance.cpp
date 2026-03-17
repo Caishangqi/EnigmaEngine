@@ -1,7 +1,10 @@
 // Copyright EnigmaEngine. All Rights Reserved.
 
 #include "ArcadeGameInstance.h"
+#include "AsciiRenderer/AsciiSpriteComponent.h"
 #include "Engine/Engine.h"
+#include "GameFramework/GameObject.h"
+#include "GameFramework/Scene.h"
 #include "Modules/ModuleManager.h"
 #include "RenderCore/AsciiRendererInterface.h"
 #include "RenderCore/AsciiCell.h"
@@ -12,6 +15,7 @@
 #include "Logging/LogCategory.h"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <string>
 
@@ -33,9 +37,18 @@ void FArcadeGameInstance::Init()
 	m_negateX.bZ = false;
 	m_swizzleYXZ.Order = Enigma::ESwizzleAxis::YXZ;
 
-	// Initial position (Y-up: bottom-left origin)
-	m_player.PosX = 5.0f;
-	m_player.PosY = 5.0f;
+	// Create the game scene and player object
+	Enigma::FScene* scene = LoadScene("ArcadeLevel");
+
+	m_playerObj = scene->CreateGameObject("Player");
+	m_playerObj->GetTransform().SetPosition(Enigma::FVector(5.0f, 5.0f, 0.0f));
+
+	m_playerSprite = m_playerObj->AddComponent<Enigma::FAsciiSpriteComponent>();
+	m_playerSprite->DisplayChar = '@';
+	m_playerSprite->Width  = 2;
+	m_playerSprite->Height = 2;
+	m_playerSprite->Fg = Enigma::FColor::Green;
+	m_playerSprite->Bg = Enigma::FColor::Black;
 
 	ENIGMA_LOG(LogArcade, Info, "ArcadeGameInstance initialized (Enhanced Input demo)");
 }
@@ -107,13 +120,13 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 	// Bind action callbacks
 	// ---------------------------------------------------------------
 
-	// Move: set velocity (applied in Update via FAsciiGameObject)
+	// Move: set velocity (applied in Update via transform)
 	Enigma::FInputActionCallback moveCb;
 	moveCb.Bind([this](const Enigma::FInputActionInstance& inst)
 	{
 		Enigma::FVector v = inst.Value.Get<Enigma::FVector>();
-		m_player.VelX = v.X * m_moveSpeed;
-		m_player.VelY = v.Y * m_moveSpeed;
+		m_velX = v.X * m_moveSpeed;
+		m_velY = v.Y * m_moveSpeed;
 	});
 	InputSubsystem.BindAction(&m_moveAction,
 		Enigma::ETriggerEvent::Triggered, std::move(moveCb));
@@ -123,10 +136,10 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 	resizeCb.Bind([this](const Enigma::FInputActionInstance& inst)
 	{
 		Enigma::FVector v = inst.Value.Get<Enigma::FVector>();
-		m_player.Width  += static_cast<int32_t>(v.X);
-		m_player.Height += static_cast<int32_t>(v.Y);
-		m_player.Width  = std::max(m_player.Width, 1);
-		m_player.Height = std::max(m_player.Height, 1);
+		m_playerSprite->Width  += static_cast<int32_t>(v.X);
+		m_playerSprite->Height += static_cast<int32_t>(v.Y);
+		m_playerSprite->Width  = std::max(m_playerSprite->Width, 1);
+		m_playerSprite->Height = std::max(m_playerSprite->Height, 1);
 	});
 	InputSubsystem.BindAction(&m_resizeAction,
 		Enigma::ETriggerEvent::Triggered, std::move(resizeCb));
@@ -140,13 +153,13 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 		{
 			m_inputSubsystem->RemoveMappingContext(&m_resizeContext);
 			m_inputSubsystem->AddMappingContext(&m_moveContext, 0);
-			m_player.Fg = Enigma::FColor::Green;
+			m_playerSprite->Fg = Enigma::FColor::Green;
 		}
 		else
 		{
 			m_inputSubsystem->RemoveMappingContext(&m_moveContext);
 			m_inputSubsystem->AddMappingContext(&m_resizeContext, 0);
-			m_player.Fg = Enigma::FColor::Yellow;
+			m_playerSprite->Fg = Enigma::FColor::Yellow;
 		}
 		ENIGMA_LOG(LogArcade, Info, "Mode: {}",
 			m_bMoveMode ? "Move" : "Resize");
@@ -172,32 +185,43 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 
 void FArcadeGameInstance::Update(float deltaTime)
 {
+	// Drive scene transitions and component updates.
 	Enigma::FGameInstance::Update(deltaTime);
 
-	// Apply velocity and clamp to buffer bounds
-	m_player.Update(deltaTime);
+	// Apply velocity to transform position, then reset velocity.
+	Enigma::FVector pos = m_playerObj->GetTransform().GetPosition();
+	pos.X += m_velX * deltaTime;
+	pos.Y += m_velY * deltaTime;
+	m_velX = 0.0f;
+	m_velY = 0.0f;
 
+	// Clamp to frame buffer bounds (accounting for sprite size).
 	auto& renderer = Enigma::FModuleManager::Get()
 		.GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
-	m_player.ClampToBounds(renderer.GetFrameBufferWidth(),
-	                       renderer.GetFrameBufferHeight());
+	const float maxX = static_cast<float>(renderer.GetFrameBufferWidth()  - m_playerSprite->Width);
+	const float maxY = static_cast<float>(renderer.GetFrameBufferHeight() - m_playerSprite->Height);
+	pos.X = std::clamp(pos.X, 0.0f, maxX);
+	pos.Y = std::clamp(pos.Y, 0.0f, maxY);
+
+	m_playerObj->GetTransform().SetPosition(pos);
 }
 
 void FArcadeGameInstance::Render()
 {
+	// Drive scene-based rendering (FAsciiSpriteComponent draws the player).
+	Enigma::FGameInstance::Render();
+
+	// Status text overlay at top of screen (Y-up: bufH-1 is the top row).
 	auto& renderer = Enigma::FModuleManager::Get()
 		.GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
-
-	// Draw the player object
-	m_player.Render(renderer, 0);
-
-	// Status text at top of screen (Y-up: bufH-1 is the top row)
 	int32_t topY = renderer.GetFrameBufferHeight() - 1;
+
+	const Enigma::FVector pos = m_playerObj->GetTransform().GetPosition();
+	int32_t rx = static_cast<int32_t>(std::round(pos.X));
+	int32_t ry = static_cast<int32_t>(std::round(pos.Y));
 	const char* mode = m_bMoveMode ? "MOVE" : "RESIZE";
-	int32_t rx = static_cast<int32_t>(std::round(m_player.PosX));
-	int32_t ry = static_cast<int32_t>(std::round(m_player.PosY));
 	std::string status = std::format("[{}] pos({},{}) size({}x{}) TAB=toggle ESC=quit",
-		mode, rx, ry, m_player.Width, m_player.Height);
+		mode, rx, ry, m_playerSprite->Width, m_playerSprite->Height);
 	renderer.DrawText(0, topY, 1, status.c_str(),
 		Enigma::FColor::White, Enigma::FColor::Blue);
 }

@@ -12,7 +12,7 @@ public class EnigmaArcade : ModuleRules
         PublicDependencyModuleNames.Add("ApplicationCore");
         PublicDependencyModuleNames.Add("RenderCore");
         PublicDependencyModuleNames.Add("EnhancedInput");
-        PublicDependencyModuleNames.Add("ArcadeGameplay");
+        PublicDependencyModuleNames.Add("AsciiRenderer");
 
         PrivateDependencyModuleNames.Add("nlohmann_json");
     }

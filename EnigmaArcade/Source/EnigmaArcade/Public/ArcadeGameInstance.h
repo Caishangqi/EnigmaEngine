@@ -4,19 +4,20 @@
 
 #include "EnigmaArcadeAPI.generated.h"
 #include "GameFramework/GameInstance.h"
-#include "AsciiGameObject.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "InputTriggers.h"
 #include "InputSubsystem.h"
 
+namespace Enigma { class FGameObject; class FAsciiSpriteComponent; }
+
 /// Game instance for EnigmaArcade.
 /// Demonstrates the Enhanced Input system with two mapping contexts:
 ///   - Move mode (WASD continuous, Down trigger, velocity-based)
 ///   - Resize mode (WASD one-shot, Pressed trigger, discrete)
 /// TAB toggles between modes, ESC exits.
-/// Renders a movable/resizable '@' rectangle via FAsciiGameObject.
+/// Uses FGameObject + FAsciiSpriteComponent (component-based architecture).
 class ENIGMAARCADE_API FArcadeGameInstance : public Enigma::FGameInstance
 {
 public:
@@ -47,9 +48,12 @@ private:
 	Enigma::FInputTriggerPressed m_toggleTrigger;
 	Enigma::FInputTriggerPressed m_exitTrigger;
 
-	// --- Game object ---
-	Enigma::FAsciiGameObject m_player{'@', 2, 2, Enigma::FColor::Green, Enigma::FColor::Black};
+	// --- Player (scene-managed) ---
+	Enigma::FGameObject* m_playerObj = nullptr;
+	Enigma::FAsciiSpriteComponent* m_playerSprite = nullptr;
 	float m_moveSpeed = 15.0f; // cells per second
+	float m_velX = 0.0f;
+	float m_velY = 0.0f;
 
 	// --- State ---
 	bool m_bMoveMode = true;
