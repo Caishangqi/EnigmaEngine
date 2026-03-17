@@ -3,13 +3,17 @@
 #pragma once
 
 #include "EngineAPI.generated.h"
+#include "GameFramework/SceneManager.h"
 
 #include <cstdint>
+#include <string>
 
 namespace Enigma
 {
 
 class FInputSubsystem; // forward declaration for SetupInput
+class FScene;
+class FGameObject;
 
 // ---------------------------------------------------------------
 // FGameInstance -- user-programmable game instance base class (REQ-013)
@@ -27,6 +31,11 @@ class FInputSubsystem; // forward declaration for SetupInput
 //
 // DeltaTime: stored in Update(), accessible via GetDeltaTime()
 // FrameCount: incremented at the start of each frame (BeginFrame)
+//
+// Scene Management:
+//   Base Update() drives FSceneManager::Tick() (scene transitions + object updates).
+//   Base Render() drives FSceneManager::RenderScene().
+//   If user overrides Update/Render without calling base, scene system is bypassed.
 // ---------------------------------------------------------------
 class ENGINE_API FGameInstance
 {
@@ -53,14 +62,31 @@ public:
     /// Called at the start of each frame. Increments FrameCount.
     virtual void BeginFrame();
 
-    /// Called with the current frame's delta time. Override for game logic.
+    /// Called with the current frame's delta time.
+    /// Base implementation drives FSceneManager::Tick().
     virtual void Update(float deltaTime);
 
-    /// Called after Update. Override for rendering logic.
+    /// Called after Update.
+    /// Base implementation drives FSceneManager::RenderScene().
     virtual void Render();
 
     /// Called at the end of each frame. Override for cleanup/finalization.
     virtual void EndFrame();
+
+    // ----- Scene Management -----
+
+    /// Get the scene manager.
+    FSceneManager& GetSceneManager() { return m_sceneManager; }
+    const FSceneManager& GetSceneManager() const { return m_sceneManager; }
+
+    /// Convenience: load a new scene (delegates to SceneManager).
+    FScene* LoadScene(const std::string& name);
+
+    /// Convenience: get the currently active scene.
+    FScene* GetActiveScene() const;
+
+    /// Convenience: create a GameObject in the active scene.
+    FGameObject* CreateGameObject(const std::string& name);
 
     // ----- Accessors -----
 
@@ -70,6 +96,7 @@ public:
 protected:
     float    DeltaTime  = 0.0f;
     uint64_t FrameCount = 0;
+    FSceneManager m_sceneManager;
 };
 
 } // namespace Enigma
