@@ -10,9 +10,6 @@ public class EnigmaArcadeTarget : TargetRules
         // Primary module (same name as project, per REQ-018)
         ExtraModuleNames.Add("EnigmaArcade");
 
-        // Gameplay logic module
-        ExtraModuleNames.Add("ArcadeGameplay");
-
         // Runtime-loaded renderer implementation (loaded dynamically via FModuleManager)
         ExtraModuleNames.Add("AsciiRenderer");
     }

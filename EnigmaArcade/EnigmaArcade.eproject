@@ -7,11 +7,6 @@
             "Name": "EnigmaArcade",
             "Type": "Runtime",
             "LoadingPhase": "Default"
-        },
-        {
-            "Name": "ArcadeGameplay",
-            "Type": "Runtime",
-            "LoadingPhase": "Default"
         }
     ],
     "Plugins": [
