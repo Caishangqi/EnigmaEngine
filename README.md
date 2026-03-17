@@ -165,7 +165,6 @@ EnigmaEngine/
     EnigmaArcade.eproject        Project descriptor
     Config/                      Project config (DefaultEngine.ini, DefaultGame.ini)
     Source/
-      ArcadeGameplay/            Game logic module (FAsciiGameObject)
       EnigmaArcade/              Main game module
     Plugins/
       ArcadeFeature/             Game plugin

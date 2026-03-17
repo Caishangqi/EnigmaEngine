@@ -165,7 +165,6 @@ EnigmaEngine/
     EnigmaArcade.eproject        项目描述符
     Config/                      项目配置 (DefaultEngine.ini, DefaultGame.ini)
     Source/
-      ArcadeGameplay/            游戏逻辑模块 (FAsciiGameObject)
       EnigmaArcade/              主游戏模块
     Plugins/
       ArcadeFeature/             游戏插件
