@@ -4,8 +4,12 @@
 
 void FPROJECT_NAMEGameInstance::Update(float DeltaTime)
 {
-	// Call base implementation
+	// Call base -- drives FSceneManager::Tick() (scene transitions + component updates)
 	Enigma::FGameInstance::Update(DeltaTime);
 
-	// Add per-frame game logic here
+	// Add per-frame game logic here.
+	// Scene management example:
+	//   LoadScene("MyScene");
+	//   auto* obj = CreateGameObject("Player");
+	//   obj->AddComponent<MyComponent>();
 }

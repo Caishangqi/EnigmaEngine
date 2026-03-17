@@ -6,6 +6,11 @@
 
 /// PROJECT_NAME game instance.
 /// Override Update() to add per-frame game logic.
+///
+/// Scene Management (built-in):
+///   Base Update() drives FSceneManager::Tick() (scene transitions + component updates).
+///   Base Render() drives FSceneManager::RenderScene() (render component dispatch).
+///   Use LoadScene(), CreateGameObject(), and AddComponent<T>() to build your game world.
 class PROJECT_NAME_API FPROJECT_NAMEGameInstance : public Enigma::FGameInstance
 {
 public:

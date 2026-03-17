@@ -17,6 +17,7 @@ void FPROJECT_NAMEGameInstance::Init()
 
 void FPROJECT_NAMEGameInstance::Update(float DeltaTime)
 {
+	// Call base -- drives FSceneManager::Tick() (scene transitions + component updates)
 	Enigma::FGameInstance::Update(DeltaTime);
 	m_frameCount++;
 
@@ -25,6 +26,11 @@ void FPROJECT_NAMEGameInstance::Update(float DeltaTime)
 
 void FPROJECT_NAMEGameInstance::Render()
 {
+	// Drive scene-based rendering (FRenderComponent dispatch).
+	// GameObjects with render components (e.g. FAsciiSpriteComponent) are drawn here.
+	Enigma::FGameInstance::Render();
+
+	// Custom overlay rendering -- drawn on top of scene content.
 	auto& renderer = Enigma::FModuleManager::Get()
 		.GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
 

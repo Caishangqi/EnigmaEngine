@@ -9,6 +9,11 @@
 /// Uses the ASCII renderer for console-based rendering.
 /// The engine creates the console window and initializes the renderer
 /// automatically from config (DefaultEngine.ini).
+///
+/// Scene Management (built-in):
+///   Base Update() drives FSceneManager::Tick() (scene transitions + component updates).
+///   Base Render() drives FSceneManager::RenderScene() (render component dispatch).
+///   Use LoadScene(), CreateGameObject(), and AddComponent<T>() to build your game world.
 class PROJECT_NAME_API FPROJECT_NAMEGameInstance : public Enigma::FGameInstance
 {
 public:

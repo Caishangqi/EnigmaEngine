@@ -16,6 +16,7 @@ void FPROJECT_NAMEGameInstance::Init()
 
 void FPROJECT_NAMEGameInstance::Update(float DeltaTime)
 {
+	// Call base -- drives FSceneManager::Tick() (scene transitions + component updates)
 	Enigma::FGameInstance::Update(DeltaTime);
 
 	// TODO: Update game logic here.
@@ -23,6 +24,10 @@ void FPROJECT_NAMEGameInstance::Update(float DeltaTime)
 
 void FPROJECT_NAMEGameInstance::Render()
 {
+	// Drive scene-based rendering (FRenderComponent dispatch).
+	// Note: DX12 render components are not yet implemented.
+	// Enigma::FGameInstance::Render();
+
 	// TODO: Record and execute DX12 command lists here.
 	// Typical flow:
 	//   1. Reset command allocator and command list

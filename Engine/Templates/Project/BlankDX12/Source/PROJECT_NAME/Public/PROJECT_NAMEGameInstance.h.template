@@ -8,6 +8,11 @@
 /// Uses a native window for DirectX 12 rendering.
 /// The engine creates the window automatically from config
 /// (DefaultEngine.ini). Override Render() to draw each frame.
+///
+/// Scene Management (built-in):
+///   Base Update() drives FSceneManager::Tick() (scene transitions + component updates).
+///   Base Render() drives FSceneManager::RenderScene() (render component dispatch).
+///   Use LoadScene(), CreateGameObject(), and AddComponent<T>() to build your game world.
 class PROJECT_NAME_API FPROJECT_NAMEGameInstance : public Enigma::FGameInstance
 {
 public:
