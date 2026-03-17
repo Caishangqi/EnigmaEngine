@@ -25,6 +25,13 @@ set(APPCORE_PRIVATE "${ENGINE_ROOT}/ApplicationCore/Private")
 set(RENDERCORE_PUBLIC "${ENGINE_ROOT}/RenderCore/Public")
 set(NLOHMANN_JSON_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/ThirdParty/nlohmann_json/include")
 
+# ---------------------------------------------------------------------------
+# Shared source file lists
+# ---------------------------------------------------------------------------
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/CoreSources.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ApplicationCoreSources.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EngineSources.cmake")
+
 # Generated API headers (normally produced by BuildTool)
 set(GENERATED_DIR "${CMAKE_BINARY_DIR}/Generated")
 file(MAKE_DIRECTORY "${GENERATED_DIR}/Core/Public")
@@ -90,40 +97,22 @@ file(WRITE "${GENERATED_DIR}/RenderCore/Public/RenderCoreAPI.generated.h"
 
 # -- Core (SHARED) --
 add_library(Core SHARED
-    "${CORE_PRIVATE}/Modules/ModuleInitializerEntry.cpp"
-    "${CORE_PRIVATE}/Modules/ModuleManager.cpp"
-    "${CORE_PRIVATE}/Logging/LogSystem.cpp"
-    "${CORE_PRIVATE}/Misc/AssertionMacros.cpp"
-    "${CORE_PRIVATE}/Misc/CoreGlobals.cpp"
-    "${CORE_PRIVATE}/Misc/ConfigCacheIni.cpp"
-    "${CORE_PRIVATE}/Misc/ConfigDelegates.cpp"
-    "${CORE_PRIVATE}/CoreModule.cpp"
+    ${CORE_BASE_SOURCES}
+    ${CORE_CONFIG_SOURCES}
+    ${CORE_NAME_SOURCES}
+    ${CORE_MATH_SOURCES}
 )
 target_include_directories(Core PUBLIC "${CORE_PUBLIC}" "${GENERATED_DIR}/Core/Public")
 target_compile_definitions(Core PRIVATE CORE_EXPORTS)
 
 # -- ApplicationCore (SHARED) --
-add_library(ApplicationCore SHARED
-    "${APPCORE_PRIVATE}/ApplicationCoreModule.cpp"
-    "${APPCORE_PRIVATE}/GenericPlatform/GenericApplication.cpp"
-    "${APPCORE_PRIVATE}/Windows/WindowsWindow.cpp"
-    "${APPCORE_PRIVATE}/Windows/WindowsApplication.cpp"
-    "${APPCORE_PRIVATE}/Windows/ConsoleWindow.cpp"
-)
+add_library(ApplicationCore SHARED ${APPLICATIONCORE_SOURCES})
 target_include_directories(ApplicationCore PUBLIC "${APPCORE_PUBLIC}" "${GENERATED_DIR}/ApplicationCore/Public" PRIVATE "${APPCORE_PRIVATE}")
 target_compile_definitions(ApplicationCore PRIVATE APPLICATIONCORE_EXPORTS)
 target_link_libraries(ApplicationCore PUBLIC Core)
 
 # -- Engine (SHARED) --
-add_library(Engine SHARED
-    "${ENGINE_PRIVATE}/Engine/Engine.cpp"
-    "${ENGINE_PRIVATE}/Engine/GameEngine.cpp"
-    "${ENGINE_PRIVATE}/Engine/EngineDelegates.cpp"
-    "${ENGINE_PRIVATE}/GameFramework/GameInstance.cpp"
-    "${ENGINE_PRIVATE}/EngineLoop.cpp"
-    "${ENGINE_PRIVATE}/EngineModule.cpp"
-    "${ENGINE_PRIVATE}/EngineGlobals.cpp"
-)
+add_library(Engine SHARED ${ENGINE_FULL_SOURCES})
 target_include_directories(Engine PUBLIC
     "${ENGINE_PUBLIC}"
     "${CORE_PUBLIC}"

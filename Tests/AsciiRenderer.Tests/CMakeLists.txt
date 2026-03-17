@@ -34,6 +34,13 @@ set(ASCIIRENDERER_PRIVATE "${ENGINE_ROOT}/AsciiRenderer/Private")
 set(GOOGLETEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/ThirdParty/googletest")
 
 # ---------------------------------------------------------------------------
+# Shared source file lists
+# ---------------------------------------------------------------------------
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/CoreSources.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/RenderCoreSources.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EngineSources.cmake")
+
+# ---------------------------------------------------------------------------
 # Generated API headers
 # ---------------------------------------------------------------------------
 set(GENERATED_DIR "${CMAKE_BINARY_DIR}/Generated")
@@ -122,17 +129,13 @@ add_subdirectory("${GOOGLETEST_DIR}" "${CMAKE_BINARY_DIR}/googletest")
 # ---------------------------------------------------------------------------
 # Core (SHARED)
 # ---------------------------------------------------------------------------
+set(ENGINE_PRIVATE "${ENGINE_ROOT}/Engine/Private")
+
 set(CORE_SOURCES
-    "${CORE_PRIVATE}/Modules/ModuleInitializerEntry.cpp"
-    "${CORE_PRIVATE}/Modules/ModuleManager.cpp"
-    "${CORE_PRIVATE}/Logging/LogSystem.cpp"
-    "${CORE_PRIVATE}/Misc/AssertionMacros.cpp"
-    "${CORE_PRIVATE}/Misc/CoreGlobals.cpp"
-    "${CORE_PRIVATE}/Misc/ConfigCacheIni.cpp"
-    "${CORE_PRIVATE}/Misc/ConfigDelegates.cpp"
-    "${CORE_PRIVATE}/CoreModule.cpp"
+    ${CORE_BASE_SOURCES}
+    ${CORE_CONFIG_SOURCES}
+    ${CORE_NAME_SOURCES}
 )
-file(GLOB CORE_MATH_SOURCES "${CORE_PRIVATE}/Math/*.cpp")
 
 add_library(Core SHARED ${CORE_SOURCES} ${CORE_MATH_SOURCES})
 target_include_directories(Core PUBLIC "${CORE_PUBLIC}" "${GENERATED_DIR}")
@@ -141,9 +144,7 @@ target_compile_definitions(Core PRIVATE CORE_EXPORTS)
 # ---------------------------------------------------------------------------
 # RenderCore (STATIC — avoid dllimport issues with test code)
 # ---------------------------------------------------------------------------
-add_library(RenderCore STATIC
-    "${RENDERCORE_PRIVATE}/RenderCoreModule.cpp"
-)
+add_library(RenderCore STATIC ${RENDERCORE_SOURCES})
 target_include_directories(RenderCore
     PUBLIC "${RENDERCORE_PUBLIC}" "${GENERATED_DIR}"
 )
@@ -151,20 +152,28 @@ target_compile_definitions(RenderCore PUBLIC RENDERCORE_STATIC_DEFINE)
 target_link_libraries(RenderCore PUBLIC Core)
 
 # ---------------------------------------------------------------------------
+# Engine (STATIC — Component/GameObject/Scene framework for SpriteComponent)
+# ---------------------------------------------------------------------------
+add_library(Engine STATIC ${ENGINE_MINIMAL_SOURCES})
+target_include_directories(Engine PUBLIC "${ENGINE_PUBLIC}" "${GENERATED_DIR}")
+target_compile_definitions(Engine PUBLIC ENGINE_STATIC_DEFINE)
+target_link_libraries(Engine PUBLIC Core RenderCore)
+
+# ---------------------------------------------------------------------------
 # AsciiRenderer sources (compiled as STATIC for direct access to Private)
 # ---------------------------------------------------------------------------
 add_library(AsciiRenderer STATIC
     "${ASCIIRENDERER_PRIVATE}/AsciiBackBuffer.cpp"
     "${ASCIIRENDERER_PRIVATE}/AsciiRasterizer.cpp"
+    "${ASCIIRENDERER_PRIVATE}/AsciiSpriteComponent.cpp"
     "${ASCIIRENDERER_PRIVATE}/ClassicConsoleBackend.cpp"
     "${ASCIIRENDERER_PRIVATE}/VTConsoleBackend.cpp"
 )
 target_include_directories(AsciiRenderer
     PUBLIC "${ASCIIRENDERER_PUBLIC}" "${ASCIIRENDERER_PRIVATE}" "${GENERATED_DIR}"
-    PRIVATE "${ENGINE_PUBLIC}"
 )
 target_compile_definitions(AsciiRenderer PUBLIC ASCIIRENDERER_STATIC_DEFINE)
-target_link_libraries(AsciiRenderer PUBLIC Core RenderCore)
+target_link_libraries(AsciiRenderer PUBLIC Core RenderCore Engine)
 
 # ---------------------------------------------------------------------------
 # Test sources
@@ -177,16 +186,10 @@ file(GLOB TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 add_executable(AsciiRendererTests ${TEST_SOURCES})
 
 target_include_directories(AsciiRendererTests PRIVATE
-    "${CORE_PUBLIC}"
-    "${RENDERCORE_PUBLIC}"
-    "${ENGINE_PUBLIC}"
-    "${ASCIIRENDERER_PUBLIC}"
     "${ASCIIRENDERER_PRIVATE}"
-    "${GENERATED_DIR}"
 )
 
 target_compile_definitions(AsciiRendererTests PRIVATE
-    ENGINE_STATIC_DEFINE
     APPLICATIONCORE_STATIC_DEFINE
 )
 
@@ -194,6 +197,7 @@ target_link_libraries(AsciiRendererTests
     PRIVATE
         Core
         RenderCore
+        Engine
         AsciiRenderer
         gtest
         gmock

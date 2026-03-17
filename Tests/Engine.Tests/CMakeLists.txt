@@ -28,6 +28,12 @@ set(ENGINE_PUBLIC "${ENGINE_ROOT}/Engine/Public")
 set(GOOGLETEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/ThirdParty/googletest")
 
 # ---------------------------------------------------------------------------
+# Shared source file lists
+# ---------------------------------------------------------------------------
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/CoreSources.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/EngineSources.cmake")
+
+# ---------------------------------------------------------------------------
 # Generated API headers
 # ---------------------------------------------------------------------------
 set(GENERATED_DIR "${CMAKE_BINARY_DIR}/Generated")
@@ -87,13 +93,9 @@ add_subdirectory("${GOOGLETEST_DIR}" "${CMAKE_BINARY_DIR}/googletest")
 # Core (SHARED)
 # ---------------------------------------------------------------------------
 set(CORE_SOURCES
-    "${CORE_PRIVATE}/Modules/ModuleInitializerEntry.cpp"
-    "${CORE_PRIVATE}/Modules/ModuleManager.cpp"
-    "${CORE_PRIVATE}/Logging/LogSystem.cpp"
-    "${CORE_PRIVATE}/Misc/AssertionMacros.cpp"
-    "${CORE_PRIVATE}/CoreModule.cpp"
+    ${CORE_BASE_SOURCES}
+    ${CORE_NAME_SOURCES}
 )
-file(GLOB CORE_MATH_SOURCES "${CORE_PRIVATE}/Math/*.cpp")
 
 add_library(Core SHARED ${CORE_SOURCES} ${CORE_MATH_SOURCES})
 target_include_directories(Core PUBLIC "${CORE_PUBLIC}" "${GENERATED_DIR}")
@@ -103,9 +105,6 @@ target_compile_definitions(Core PRIVATE CORE_EXPORTS)
 # Engine sources needed by tests (compiled directly with ENGINE_STATIC_DEFINE)
 # ---------------------------------------------------------------------------
 set(ENGINE_PRIVATE "${ENGINE_ROOT}/Engine/Private")
-set(ENGINE_SUBSYSTEM_SOURCES
-    "${ENGINE_PRIVATE}/Subsystems/SubsystemCollection.cpp"
-)
 
 # ---------------------------------------------------------------------------
 # Test sources
@@ -114,11 +113,9 @@ file(GLOB TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 # ---------------------------------------------------------------------------
 # EngineTests (executable, links Core + GoogleTest)
-# FSceneView is header-only (no out-of-line methods), so Engine DLL
-# is not needed — just Core for FTransform/FVector/FColor.
-# Define ENGINE_STATIC_DEFINE so ENGINE_API resolves to empty.
+# Engine sources compiled directly with ENGINE_STATIC_DEFINE (no Engine DLL).
 # ---------------------------------------------------------------------------
-add_executable(EngineTests ${TEST_SOURCES} ${ENGINE_SUBSYSTEM_SOURCES})
+add_executable(EngineTests ${TEST_SOURCES} ${ENGINE_MINIMAL_SOURCES})
 
 target_include_directories(EngineTests PRIVATE
     "${CORE_PUBLIC}"

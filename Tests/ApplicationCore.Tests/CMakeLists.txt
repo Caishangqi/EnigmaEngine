@@ -21,12 +21,18 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Bin)
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source")
-set(CORE_PUBLIC "${ENGINE_ROOT}/Runtime/Core/Public")
-set(CORE_PRIVATE "${ENGINE_ROOT}/Runtime/Core/Private")
-set(APPCORE_PUBLIC "${ENGINE_ROOT}/Runtime/ApplicationCore/Public")
-set(APPCORE_PRIVATE "${ENGINE_ROOT}/Runtime/ApplicationCore/Private")
-set(GOOGLETEST_DIR "${ENGINE_ROOT}/ThirdParty/googletest")
+set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/Runtime")
+set(CORE_PUBLIC "${ENGINE_ROOT}/Core/Public")
+set(CORE_PRIVATE "${ENGINE_ROOT}/Core/Private")
+set(APPCORE_PUBLIC "${ENGINE_ROOT}/ApplicationCore/Public")
+set(APPCORE_PRIVATE "${ENGINE_ROOT}/ApplicationCore/Private")
+set(GOOGLETEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Source/ThirdParty/googletest")
+
+# ---------------------------------------------------------------------------
+# Shared source file lists
+# ---------------------------------------------------------------------------
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/CoreSources.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ApplicationCoreSources.cmake")
 
 # ---------------------------------------------------------------------------
 # Generated headers
@@ -72,15 +78,9 @@ add_subdirectory("${GOOGLETEST_DIR}" "${CMAKE_BINARY_DIR}/googletest")
 # Core (SHARED)
 # ---------------------------------------------------------------------------
 set(CORE_SOURCES
-    "${CORE_PRIVATE}/Modules/ModuleInitializerEntry.cpp"
-    "${CORE_PRIVATE}/Modules/ModuleManager.cpp"
-    "${CORE_PRIVATE}/Logging/LogSystem.cpp"
-    "${CORE_PRIVATE}/Misc/AssertionMacros.cpp"
-    "${CORE_PRIVATE}/CoreModule.cpp"
-    "${CORE_PRIVATE}/Delegates/DelegateHandle.cpp"
+    ${CORE_BASE_SOURCES}
+    ${CORE_DELEGATE_SOURCES}
 )
-
-file(GLOB CORE_MATH_SOURCES "${CORE_PRIVATE}/Math/*.cpp")
 
 add_library(Core SHARED ${CORE_SOURCES} ${CORE_MATH_SOURCES})
 target_include_directories(Core PUBLIC "${CORE_PUBLIC}" "${GENERATED_DIR}")
@@ -89,15 +89,7 @@ target_compile_definitions(Core PRIVATE CORE_EXPORTS)
 # ---------------------------------------------------------------------------
 # ApplicationCore (SHARED) -- the module under test
 # ---------------------------------------------------------------------------
-set(APPCORE_SOURCES
-    "${APPCORE_PRIVATE}/ApplicationCoreModule.cpp"
-    "${APPCORE_PRIVATE}/GenericPlatform/GenericApplication.cpp"
-    "${APPCORE_PRIVATE}/Windows/WindowsWindow.cpp"
-    "${APPCORE_PRIVATE}/Windows/WindowsApplication.cpp"
-    "${APPCORE_PRIVATE}/Windows/ConsoleWindow.cpp"
-)
-
-add_library(ApplicationCore SHARED ${APPCORE_SOURCES})
+add_library(ApplicationCore SHARED ${APPLICATIONCORE_SOURCES})
 target_include_directories(ApplicationCore
     PUBLIC "${APPCORE_PUBLIC}" "${GENERATED_DIR}"
     PRIVATE "${APPCORE_PRIVATE}"
