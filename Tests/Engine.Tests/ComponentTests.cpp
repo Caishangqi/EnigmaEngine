@@ -80,7 +80,7 @@ TEST(ComponentTest, BeginPlay_SetsFlag)
 	auto* comp = obj->AddComponent<FMockComponent>();
 
 	EXPECT_FALSE(comp->HasBegunPlay());
-	scene.Tick(0.016f); // triggers BeginPlay + Update
+	scene.BeginPlay(); // dispatches BeginPlay on all components
 	EXPECT_TRUE(comp->HasBegunPlay());
 	EXPECT_EQ(comp->beginPlayCount, 1);
 }
@@ -91,38 +91,34 @@ TEST(ComponentTest, BeginPlay_CalledOnlyOnce)
 	auto* obj = scene.CreateGameObject("Obj");
 	auto* comp = obj->AddComponent<FMockComponent>();
 
-	scene.Tick(0.016f);
-	scene.Tick(0.016f);
-	scene.Tick(0.016f);
+	scene.BeginPlay();
+	scene.BeginPlay(); // second call is a no-op
 	EXPECT_EQ(comp->beginPlayCount, 1);
-	EXPECT_EQ(comp->updateCount, 3);
 }
 
-TEST(ComponentTest, Update_ReceivesDeltaTime)
+TEST(ComponentTest, BeginPlay_DynamicObject_ReceivesBeginPlayImmediately)
 {
 	FScene scene("TestScene");
-	auto* obj = scene.CreateGameObject("Obj");
-	auto* comp = obj->AddComponent<FMockComponent>();
+	scene.BeginPlay(); // scene is now in begun-play state
 
-	scene.Tick(0.033f);
-	EXPECT_FLOAT_EQ(comp->lastDeltaTime, 0.033f);
+	// Objects created after BeginPlay receive it immediately (UE5 FinishSpawning)
+	auto* obj = scene.CreateGameObject("Late");
+	auto* comp = obj->AddComponent<FMockComponent>();
+	EXPECT_TRUE(comp->HasBegunPlay());
+	EXPECT_EQ(comp->beginPlayCount, 1);
 }
 
-TEST(ComponentTest, SetEnabled_DisablesUpdate)
+TEST(ComponentTest, BeginPlay_CalledRegardlessOfEnabledState)
 {
 	FScene scene("TestScene");
 	auto* obj = scene.CreateGameObject("Obj");
 	auto* comp = obj->AddComponent<FMockComponent>();
 
 	comp->SetEnabled(false);
-	scene.Tick(0.016f);
-	EXPECT_EQ(comp->updateCount, 0);
-	EXPECT_FALSE(comp->HasBegunPlay());
-
-	comp->SetEnabled(true);
-	scene.Tick(0.016f);
-	EXPECT_EQ(comp->updateCount, 1);
+	scene.BeginPlay();
+	// BeginPlay is dispatched regardless of enabled state (UE5 pattern)
 	EXPECT_TRUE(comp->HasBegunPlay());
+	EXPECT_EQ(comp->beginPlayCount, 1);
 }
 
 TEST(ComponentTest, GetName_ReturnsStaticName)

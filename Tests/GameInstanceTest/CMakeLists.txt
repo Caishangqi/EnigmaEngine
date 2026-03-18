@@ -98,9 +98,7 @@ file(WRITE "${GENERATED_DIR}/RenderCore/Public/RenderCoreAPI.generated.h"
 
 # -- Core (SHARED) --
 add_library(Core SHARED
-    ${CORE_BASE_SOURCES}
-    ${CORE_CONFIG_SOURCES}
-    ${CORE_NAME_SOURCES}
+    ${ENGINE_REQUIRED_CORE_SOURCES}
     ${CORE_MATH_SOURCES}
 )
 target_include_directories(Core PUBLIC "${CORE_PUBLIC}" "${GENERATED_DIR}/Core/Public")

@@ -93,8 +93,7 @@ add_subdirectory("${GOOGLETEST_DIR}" "${CMAKE_BINARY_DIR}/googletest")
 # Core (SHARED)
 # ---------------------------------------------------------------------------
 set(CORE_SOURCES
-    ${CORE_BASE_SOURCES}
-    ${CORE_NAME_SOURCES}
+    ${ENGINE_REQUIRED_CORE_SOURCES}
 )
 
 add_library(Core SHARED ${CORE_SOURCES} ${CORE_MATH_SOURCES})

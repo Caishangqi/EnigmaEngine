@@ -105,21 +105,15 @@ TEST(SceneTest, DestroyGameObject_Deferred)
 	EXPECT_EQ(scene.FindGameObjectByID(id), nullptr);
 }
 
-TEST(SceneTest, Tick_DrivesBeginPlayAndUpdate)
+TEST(SceneTest, BeginPlay_DrivesComponentBeginPlay)
 {
 	FScene scene("TestScene");
 	auto* obj = scene.CreateGameObject("Obj");
 	auto* comp = obj->AddComponent<FSceneTestComponent>();
 
 	EXPECT_FALSE(comp->begunPlay);
-	EXPECT_EQ(comp->updateCount, 0);
-
-	scene.Tick(0.016f);
+	scene.BeginPlay();
 	EXPECT_TRUE(comp->begunPlay);
-	EXPECT_EQ(comp->updateCount, 1);
-
-	scene.Tick(0.016f);
-	EXPECT_EQ(comp->updateCount, 2);
 }
 
 TEST(SceneTest, GetAllGameObjects)
