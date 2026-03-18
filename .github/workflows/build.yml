@@ -142,6 +142,30 @@ jobs:
       - name: "Engine: Test"
         run: ctest --test-dir build-engine --output-on-failure -C Release --progress
 
+      # -- Core.ThreadPool --
+      - name: "Core.ThreadPool: Configure"
+        run: cmake -B build-core-threadpool -S Tests/Core.ThreadPool.Tests
+      - name: "Core.ThreadPool: Build"
+        run: cmake --build build-core-threadpool --config Release
+      - name: "Core.ThreadPool: Test"
+        run: ctest --test-dir build-core-threadpool --output-on-failure -C Release --progress
+
+      # -- Core.TaskGraph --
+      - name: "Core.TaskGraph: Configure"
+        run: cmake -B build-core-taskgraph -S Tests/Core.TaskGraph.Tests
+      - name: "Core.TaskGraph: Build"
+        run: cmake --build build-core-taskgraph --config Release
+      - name: "Core.TaskGraph: Test"
+        run: ctest --test-dir build-core-taskgraph --output-on-failure -C Release --progress
+
+      # -- Engine.TickSystem --
+      - name: "Engine.TickSystem: Configure"
+        run: cmake -B build-engine-ticksystem -S Tests/Engine.TickSystem.Tests
+      - name: "Engine.TickSystem: Build"
+        run: cmake --build build-engine-ticksystem --config Release
+      - name: "Engine.TickSystem: Test"
+        run: ctest --test-dir build-engine-ticksystem --output-on-failure -C Release --progress
+
       # -- AsciiRenderer --
       - name: "AsciiRenderer: Configure"
         run: cmake -B build-ascii-renderer -S Tests/AsciiRenderer.Tests
