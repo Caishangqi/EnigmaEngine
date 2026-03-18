@@ -102,6 +102,7 @@ Reference/
 .serena/
 .spec-workflow/
 .mcp.json
+CLAUDE.md
 
 # -----------------------------------------------------------------------------
 # Local scripts (not committed)
