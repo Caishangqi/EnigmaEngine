@@ -7,6 +7,7 @@
 #   CORE_NAME_SOURCES    — FName support (Name.cpp)
 #   CORE_DELEGATE_SOURCES — Delegate handle (DelegateHandle.cpp)
 #   CORE_MATH_SOURCES    — All Math/*.cpp via file(GLOB)
+#   CORE_ASYNC_SOURCES   — Async system (ThreadPool, TaskGraph)
 
 if(NOT DEFINED ENGINE_ROOT)
     message(FATAL_ERROR "ENGINE_ROOT must be set before including CoreSources.cmake")
@@ -37,5 +38,10 @@ set(CORE_DELEGATE_SOURCES
 )
 
 file(GLOB CORE_MATH_SOURCES "${_CORE_PRIVATE}/Math/*.cpp")
+
+set(CORE_ASYNC_SOURCES
+    "${_CORE_PRIVATE}/Async/ThreadPool.cpp"
+    "${_CORE_PRIVATE}/Async/TaskGraph.cpp"
+)
 
 unset(_CORE_PRIVATE)
