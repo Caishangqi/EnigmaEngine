@@ -4,6 +4,7 @@
 #include "GameFramework/Scene.h"
 #include "GameFramework/SceneManager.h"
 #include "GameFramework/GameInstance.h"
+#include "GameFramework/Component.h"
 #include "Engine/Engine.h"
 #include "Logging/LogMacros.h"
 
@@ -57,26 +58,21 @@ FGameObject* FGameObject::Create(const std::string& name)
 // Frame Update
 // ---------------------------------------------------------------
 
-void FGameObject::Update(float deltaTime)
+void FGameObject::Update(float /*deltaTime*/)
 {
-	if (!m_bActive)
+	// Component tick dispatch is handled by FTickTaskManager subsystem.
+	// Non-ticking components (bCanEverTick=false) do not receive Update calls,
+	// matching UE5 behavior. BeginPlay is driven separately by FScene lifecycle.
+}
+
+void FGameObject::dispatchBeginPlayIfReady(FComponent* comp)
+{
+	// If the scene has already begun play, dispatch BeginPlay immediately
+	// on the newly attached component (like UE5 FinishSpawning).
+	// BeginPlay is called regardless of enabled state (UE5 pattern).
+	if (m_scene && m_scene->HasBegunPlay() && !comp->HasBegunPlay())
 	{
-		return;
-	}
-
-	for (auto& comp : m_components)
-	{
-		if (!comp->IsEnabled())
-		{
-			continue;
-		}
-
-		if (!comp->HasBegunPlay())
-		{
-			comp->BeginPlay();
-		}
-
-		comp->Update(deltaTime);
+		comp->BeginPlay();
 	}
 }
 

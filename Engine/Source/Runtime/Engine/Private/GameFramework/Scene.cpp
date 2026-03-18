@@ -1,6 +1,7 @@
 // Copyright EnigmaEngine. All Rights Reserved.
 
 #include "GameFramework/Scene.h"
+#include "GameFramework/Component.h"
 #include "GameFramework/RenderComponent.h"
 #include "Misc/AssertionMacros.h"
 #include "Logging/LogMacros.h"
@@ -38,6 +39,14 @@ FGameObject* FScene::CreateGameObject(const std::string& name)
 	FGameObject* raw = obj.get();
 	m_gameObjects.push_back(std::move(obj));
 	ENIGMA_LOG(LogScene, Verbose, "Scene '{}': created GameObject '{}' (ID={})", m_name, name, id);
+
+	// If scene has already begun play, dispatch BeginPlay immediately
+	// on the new object (like UE5 FinishSpawning).
+	if (m_bHasBegunPlay)
+	{
+		dispatchBeginPlayOnObject(*raw);
+	}
+
 	return raw;
 }
 
@@ -81,18 +90,47 @@ std::span<const std::unique_ptr<FGameObject>> FScene::GetAllGameObjects() const
 }
 
 // ---------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------
+
+void FScene::BeginPlay()
+{
+	if (m_bHasBegunPlay)
+	{
+		return;
+	}
+	m_bHasBegunPlay = true;
+
+	ENIGMA_LOG(LogScene, Info, "Scene '{}': BeginPlay", m_name);
+
+	for (auto& obj : m_gameObjects)
+	{
+		if (obj->IsActive())
+		{
+			dispatchBeginPlayOnObject(*obj);
+		}
+	}
+}
+
+void FScene::dispatchBeginPlayOnObject(FGameObject& obj)
+{
+	for (auto& comp : obj.m_components)
+	{
+		if (!comp->HasBegunPlay())
+		{
+			comp->BeginPlay();
+		}
+	}
+}
+
+// ---------------------------------------------------------------
 // Frame Loop
 // ---------------------------------------------------------------
 
-void FScene::Tick(float deltaTime)
+void FScene::Tick(float /*deltaTime*/)
 {
-	// Update all active game objects (BeginPlay + Update handled inside FGameObject::Update)
-	for (auto& obj : m_gameObjects)
-	{
-		obj->Update(deltaTime);
-	}
-
-	// Clean up destroyed objects at frame end
+	// Component Update/Tick is handled by FTickTaskManager subsystem.
+	// FScene only handles deferred object destruction.
 	processPendingDestroys();
 }
 

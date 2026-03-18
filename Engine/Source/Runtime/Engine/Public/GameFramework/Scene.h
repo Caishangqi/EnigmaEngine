@@ -24,9 +24,12 @@ class FRenderComponent;
 ///
 /// Responsibilities:
 ///   - Create/destroy game objects with unique IDs
-///   - Drive per-frame Update on all active objects
+///   - Drive BeginPlay lifecycle on components (one-shot, UE5 pattern)
 ///   - Maintain a render component registry for decoupled render traversal
 ///   - Deferred destruction: objects marked for destroy are cleaned up at frame end
+///
+/// Component Update/Tick is handled by FTickTaskManager for components
+/// with bCanEverTick=true. Non-ticking components only receive BeginPlay.
 ///
 /// Unity equivalent: Scene
 /// UE equivalent: UWorld (simplified, flat, no levels)
@@ -46,6 +49,8 @@ public:
 
 	/// Create a new FGameObject in this scene.
 	/// Assigns a unique monotonic ID and sets the object's scene pointer.
+	/// If the scene has already begun play, BeginPlay is dispatched
+	/// immediately on the new object's components (like UE5 FinishSpawning).
 	FGameObject* CreateGameObject(const std::string& name);
 
 	/// Mark a game object for deferred destruction (processed at frame end).
@@ -62,9 +67,21 @@ public:
 	/// Get a read-only view of all game objects.
 	[[nodiscard]] std::span<const std::unique_ptr<FGameObject>> GetAllGameObjects() const;
 
+	// ----- Lifecycle -----
+
+	/// Dispatch BeginPlay on all components in the scene (one-shot).
+	/// Called once when the scene becomes active (like UE5 ULevel::RouteActorInitialize).
+	/// After this call, dynamically created objects receive BeginPlay immediately
+	/// in CreateGameObject.
+	void BeginPlay();
+
+	/// Check if BeginPlay has been dispatched on this scene.
+	[[nodiscard]] bool HasBegunPlay() const noexcept { return m_bHasBegunPlay; }
+
 	// ----- Frame Loop -----
 
-	/// Drive one frame: BeginPlay (new components) -> Update -> processPendingDestroys.
+	/// Drive one frame: processPendingDestroys.
+	/// Component Update is handled by FTickTaskManager, not by FScene.
 	void Tick(float deltaTime);
 
 	/// Render all registered render components (skip inactive owners).
@@ -83,6 +100,9 @@ public:
 	[[nodiscard]] std::string_view GetName() const noexcept { return m_name; }
 
 private:
+	/// Dispatch BeginPlay on all components of a single game object.
+	void dispatchBeginPlayOnObject(FGameObject& obj);
+
 	/// Clean up objects marked for deferred destruction.
 	void processPendingDestroys();
 
@@ -91,6 +111,7 @@ private:
 	std::vector<FRenderComponent*> m_renderComponents; // non-owning registry
 	std::vector<uint64_t> m_pendingDestroys;
 	uint64_t m_nextObjectID = 1;
+	bool m_bHasBegunPlay = false;
 };
 
 } // namespace Enigma

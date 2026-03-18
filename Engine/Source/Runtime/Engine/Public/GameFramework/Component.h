@@ -7,11 +7,15 @@
 
 #include "EngineAPI.generated.h"
 #include "Misc/Name.h"
+#include "TickSystem/TickGroup.h"
+
+#include <memory>
 
 namespace Enigma
 {
 
 class FGameObject;
+class FComponentTickFunction;
 
 /// @brief Abstract base class for all components.
 ///
@@ -30,7 +34,8 @@ class FGameObject;
 class ENGINE_API FComponent
 {
 public:
-	virtual ~FComponent() = default;
+	FComponent();
+	virtual ~FComponent();
 
 	// ----- Type Identification -----
 
@@ -69,7 +74,8 @@ public:
 	[[nodiscard]] bool IsEnabled() const noexcept { return m_bEnabled; }
 
 	/// Enable or disable this component.
-	void SetEnabled(bool bEnabled) noexcept { m_bEnabled = bEnabled; }
+	/// Also syncs the tick function enable state if present.
+	void SetEnabled(bool bEnabled);
 
 	// ----- Owner Access -----
 
@@ -82,10 +88,34 @@ public:
 	/// Check if BeginPlay() has been called on this component.
 	[[nodiscard]] bool HasBegunPlay() const noexcept { return m_bBegunPlay; }
 
+	// ----- Tick Configuration (set in constructor, before OnAttach) -----
+
+	/// If true, a FComponentTickFunction is created and registered on attach.
+	/// Default: false (zero overhead for non-ticking components).
+	bool bCanEverTick = false;
+
+	/// If false, the tick function is registered but disabled until explicitly enabled.
+	bool bStartWithTickEnabled = true;
+
+	/// Which tick group this component belongs to.
+	ETickGroup TickGroup = ETickGroup::TG_Update;
+
+	/// Tick interval in seconds. 0 = every frame.
+	float TickInterval = 0.0f;
+
+	// ----- Tick Function Access -----
+
+	/// Returns the tick function, or nullptr if bCanEverTick is false.
+	[[nodiscard]] FComponentTickFunction* GetTickFunction() const noexcept
+	{
+		return m_tickFunction.get();
+	}
+
 protected:
 	FGameObject* m_owner = nullptr;
 	bool m_bEnabled = true;
 	bool m_bBegunPlay = false;
+	std::unique_ptr<FComponentTickFunction> m_tickFunction;
 };
 
 } // namespace Enigma

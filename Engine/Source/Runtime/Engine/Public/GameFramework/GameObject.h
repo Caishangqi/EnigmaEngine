@@ -95,12 +95,16 @@ public:
 
 	// ----- Frame Update (called by FScene) -----
 
-	/// Tick all enabled components: BeginPlay (if needed) then Update.
+	/// No-op. Component tick dispatch is handled by FTickTaskManager.
 	void Update(float deltaTime);
 
 private:
 	/// Private constructor -- only FScene can create instances.
 	FGameObject(uint64_t id, const std::string& name, FScene* scene);
+
+	/// Dispatch BeginPlay on a component if the scene has already begun play.
+	/// Called from AddComponent after OnAttach.
+	void dispatchBeginPlayIfReady(FComponent* comp);
 
 	uint64_t m_id;
 	std::string m_name;
@@ -123,6 +127,7 @@ T* FGameObject::AddComponent(Args&&... args)
 	T* raw = component.get();
 	raw->OnAttach(this);
 	m_components.push_back(std::move(component));
+	dispatchBeginPlayIfReady(raw);
 	return raw;
 }
 

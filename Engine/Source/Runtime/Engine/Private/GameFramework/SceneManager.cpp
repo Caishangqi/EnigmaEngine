@@ -39,6 +39,9 @@ void FSceneManager::Tick(float deltaTime)
 		m_bSceneTransitionRequested = false;
 
 		ENIGMA_LOG(LogSceneManager, Info, "Scene '{}' is now active", m_activeScene->GetName());
+
+		// Dispatch BeginPlay on the newly active scene (UE5 pattern).
+		m_activeScene->BeginPlay();
 	}
 
 	// Tick the active scene
