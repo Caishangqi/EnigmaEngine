@@ -30,6 +30,9 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - Core math library: FVector, FMatrix, FQuat, FRotator, FTransform and more, right-hand Y-up coordinate system, constexpr-friendly
 - Delegate & event system: type-safe TDelegate, TMulticastDelegate with FDelegateHandle lifecycle management, supports static/lambda/member function bindings
 - Engine subsystem framework: extensible SubsystemCollection with automatic lifecycle management, similar to UE's subsystem architecture
+- Async task infrastructure: FThreadPool for general-purpose thread pooling, FTaskGraph for dependency-based parallel task scheduling with named tasks and prerequisite chains
+- Tick system: FTickTaskManager subsystem with tick groups (PreUpdate/Update/PostUpdate), prerequisite-based ordering, optional multi-threaded dispatch via FTaskGraph, and configurable tick intervals
+- Game object framework: FScene / FGameObject / FComponent hierarchy with lifecycle hooks (OnAttach, BeginPlay, Update, OnDetach), scene-driven BeginPlay dispatch following UE5 patterns, and dynamic object support
 - Enhanced Input system: action-based input with triggers (Pressed/Released/Down), modifiers (Negate/Swizzle/DeadZone/Scalar), and mapping contexts with priority support
 - ASCII renderer: frame-buffer based ASCII art rendering with Z-depth sorting, scene view camera, Y-up coordinate convention, and VT100 terminal output
 
@@ -121,11 +124,11 @@ The EXE locates game DLLs at runtime via `--project-dir=` command line argument 
 
 | **Name** | **Description** | **Status** |
 |----------|:---------------:|:----------:|
-| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), INI config system (FConfigCacheIni, GConfig), and core math types (FVector, FMatrix, FQuat, FRotator, FTransform) | stable |
+| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), INI config system (FConfigCacheIni, GConfig), core math types (FVector, FMatrix, FQuat, FRotator, FTransform), and async task infrastructure (FThreadPool, FTaskGraph) | stable |
 | `Enigma::ApplicationCore` | Platform-agnostic application and window abstraction (FGenericApplication, FGenericWindow, FGenericApplicationMessageHandler) with Win32 implementation | stable |
 | `Enigma::RenderCore` | Renderer interface abstraction layer (IRendererModule) decoupling engine from concrete renderer implementations | stable |
 | `Enigma::AsciiRenderer` | ASCII art renderer with frame-buffer, Z-depth sorting, scene view camera, and VT100 terminal output | stable |
-| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine with config-driven window creation, FGameInstance, SubsystemCollection, and module loading phase management | stable |
+| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine with config-driven window creation, FGameInstance, SubsystemCollection, FTickTaskManager tick scheduling, FScene/FGameObject/FComponent game object framework with scene-driven BeginPlay lifecycle, and module loading phase management | stable |
 | `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
 | `Enigma::EnhancedInput` | Action-based input system with triggers, modifiers, and mapping contexts (engine plugin) | stable |
 
@@ -146,11 +149,11 @@ EnigmaEngine/
     Intermediate/                Engine build intermediates + generated .vcxproj files
     Source/
       Runtime/                   Runtime modules
-        Core/                      Foundation: module system, logging, math, delegates, config
+        Core/                      Foundation: module system, logging, math, delegates, config, async tasks
         ApplicationCore/           Platform application & window abstraction (Win32)
         RenderCore/                Renderer interface abstraction (IRendererModule)
         AsciiRenderer/             ASCII frame-buffer renderer with Z-depth & scene camera
-        Engine/                    Engine loop, GameEngine, GameInstance, SubsystemCollection
+        Engine/                    Engine loop, GameEngine, GameInstance, SubsystemCollection, TickSystem, Scene/GameObject/Component
         Launch/                    Entry point (GuardedMain, main/WinMain)
       ThirdParty/                Third-party libraries (nlohmann_json, googletest)
       Programs/
@@ -177,10 +180,13 @@ EnigmaEngine/
     Core.Math.Tests/             Core math unit tests (GoogleTest, 284+ tests)
     Core.Delegates.Tests/        Delegate system unit tests (GoogleTest, 37 tests)
     Core.Config.Tests/           Config system unit tests (GoogleTest)
+    Core.ThreadPool.Tests/       Thread pool unit tests (GoogleTest)
+    Core.TaskGraph.Tests/        Task graph unit tests (GoogleTest)
     ApplicationCore.Tests/       Window & message pump tests (GoogleTest, 20 tests)
     RenderCore.Tests/            RenderCore module tests (GoogleTest)
     AsciiRenderer.Tests/         AsciiRenderer module tests (GoogleTest)
     Engine.Tests/                Engine module tests (GoogleTest)
+    Engine.TickSystem.Tests/     Tick system unit tests (GoogleTest)
     EnhancedInput.Tests/         Enhanced Input system tests (GoogleTest)
     DllExportMacroTest/          DLL export macro validation
     ModuleInterfaceTest/         Module interface integration test

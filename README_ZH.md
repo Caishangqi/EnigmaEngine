@@ -30,6 +30,9 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - 核心数学库：FVector、FMatrix、FQuat、FRotator、FTransform 等完整 3D 数学类型，右手 Y-up 坐标系，constexpr 友好
 - 委托与事件系统：类型安全的 TDelegate、TMulticastDelegate，FDelegateHandle 生命周期管理，支持静态/Lambda/成员函数绑定
 - 引擎子系统框架：可扩展的 SubsystemCollection，自动生命周期管理，类似 UE 的子系统架构
+- 异步任务基础设施：FThreadPool 通用线程池、FTaskGraph 基于依赖的并行任务调度，支持命名任务和前置依赖链
+- Tick 系统：FTickTaskManager 子系统，支持 Tick 组（PreUpdate/Update/PostUpdate）、前置依赖排序、可选多线程调度（FTaskGraph）和可配置 Tick 间隔
+- 游戏对象框架：FScene / FGameObject / FComponent 层级结构，生命周期钩子（OnAttach、BeginPlay、Update、OnDetach），遵循 UE5 模式的场景驱动 BeginPlay 分发，支持动态对象
 - 增强输入系统：基于动作的输入系统，支持触发器（Pressed/Released/Down）、修饰器（Negate/Swizzle/DeadZone/Scalar）和带优先级的映射上下文
 - ASCII 渲染器：基于帧缓冲的 ASCII 字符渲染，Z 深度排序、场景视图摄像机、Y-up 坐标约定、VT100 终端输出
 
@@ -121,11 +124,11 @@ EXE 通过 `--project-dir=` 命令行参数在运行时定位游戏 DLL（VS 调
 
 | **名称** | **说明** | **状态** |
 |----------|:--------:|:--------:|
-| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）、INI 配置系统（FConfigCacheIni、GConfig）和核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform） | stable |
+| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）、INI 配置系统（FConfigCacheIni、GConfig）、核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform）和异步任务基础设施（FThreadPool、FTaskGraph） | stable |
 | `Enigma::ApplicationCore` | 平台无关的应用程序和窗口抽象（FGenericApplication、FGenericWindow、FGenericApplicationMessageHandler），含 Win32 实现 | stable |
 | `Enigma::RenderCore` | 渲染器接口抽象层（IRendererModule），将引擎与具体渲染器实现解耦 | stable |
 | `Enigma::AsciiRenderer` | ASCII 字符渲染器，帧缓冲、Z 深度排序、场景视图摄像机、VT100 终端输出 | stable |
-| `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine 配置驱动窗口创建、FGameInstance 游戏实例、SubsystemCollection 子系统集合和模块加载阶段管理 | stable |
+| `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine 配置驱动窗口创建、FGameInstance 游戏实例、SubsystemCollection 子系统集合、FTickTaskManager Tick 调度、FScene/FGameObject/FComponent 游戏对象框架（场景驱动 BeginPlay 生命周期）和模块加载阶段管理 | stable |
 | `Enigma::Launch` | 入口点模块，提供 GuardedMain 守护主函数和平台特定启动逻辑（main / WinMain） | stable |
 | `Enigma::EnhancedInput` | 基于动作的输入系统，支持触发器、修饰器和映射上下文（引擎插件） | stable |
 
@@ -146,11 +149,11 @@ EnigmaEngine/
     Intermediate/                引擎构建中间文件 + 生成的 .vcxproj 文件
     Source/
       Runtime/                   引擎运行时模块
-        Core/                      基础模块：模块系统、日志、数学库、委托、配置
+        Core/                      基础模块：模块系统、日志、数学库、委托、配置、异步任务
         ApplicationCore/           平台应用程序与窗口抽象 (Win32)
         RenderCore/                渲染器接口抽象层 (IRendererModule)
         AsciiRenderer/             ASCII 帧缓冲渲染器，Z 深度排序、场景视图摄像机
-        Engine/                    引擎循环、GameEngine、GameInstance、SubsystemCollection
+        Engine/                    引擎循环、GameEngine、GameInstance、SubsystemCollection、TickSystem、Scene/GameObject/Component
         Launch/                    入口点 (GuardedMain, main/WinMain)
       ThirdParty/                第三方库 (nlohmann_json, googletest)
       Programs/
@@ -177,10 +180,13 @@ EnigmaEngine/
     Core.Math.Tests/             Core 数学库单元测试 (GoogleTest, 284+ 个测试)
     Core.Delegates.Tests/        委托系统单元测试 (GoogleTest, 37 个测试)
     Core.Config.Tests/           配置系统单元测试 (GoogleTest)
+    Core.ThreadPool.Tests/       线程池单元测试 (GoogleTest)
+    Core.TaskGraph.Tests/        任务图单元测试 (GoogleTest)
     ApplicationCore.Tests/       窗口与消息泵测试 (GoogleTest, 20 个测试)
     RenderCore.Tests/            RenderCore 模块测试 (GoogleTest)
     AsciiRenderer.Tests/         AsciiRenderer 模块测试 (GoogleTest)
     Engine.Tests/                Engine 模块测试 (GoogleTest)
+    Engine.TickSystem.Tests/     Tick 系统单元测试 (GoogleTest)
     EnhancedInput.Tests/         增强输入系统测试 (GoogleTest)
     DllExportMacroTest/          DLL 导出宏验证
     ModuleInterfaceTest/         模块接口集成测试
