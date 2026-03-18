@@ -11,6 +11,7 @@
 #include "InputSubsystem.h"
 
 namespace Enigma { class FGameObject; class FAsciiSpriteComponent; }
+class FArcadeMovementComponent;
 
 /// Game instance for EnigmaArcade.
 /// Demonstrates the Enhanced Input system with two mapping contexts:
@@ -51,9 +52,7 @@ private:
 	// --- Player (scene-managed) ---
 	Enigma::FGameObject* m_playerObj = nullptr;
 	Enigma::FAsciiSpriteComponent* m_playerSprite = nullptr;
-	float m_moveSpeed = 15.0f; // cells per second
-	float m_velX = 0.0f;
-	float m_velY = 0.0f;
+	FArcadeMovementComponent* m_movementComp = nullptr;
 
 	// --- State ---
 	bool m_bMoveMode = true;

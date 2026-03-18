@@ -1,6 +1,8 @@
 // Copyright EnigmaEngine. All Rights Reserved.
 
 #include "ArcadeGameInstance.h"
+#include "ArcadeMovementComponent.h"
+#include "ArcadeBoundsClampComponent.h"
 #include "AsciiRenderer/AsciiSpriteComponent.h"
 #include "Engine/Engine.h"
 #include "GameFramework/GameObject.h"
@@ -49,6 +51,10 @@ void FArcadeGameInstance::Init()
 	m_playerSprite->Height = 2;
 	m_playerSprite->Fg = Enigma::FColor::Green;
 	m_playerSprite->Bg = Enigma::FColor::Black;
+
+	// Add tick-driven components for movement and bounds clamping
+	m_movementComp = m_playerObj->AddComponent<FArcadeMovementComponent>();
+	m_playerObj->AddComponent<FArcadeBoundsClampComponent>();
 
 	ENIGMA_LOG(LogArcade, Info, "ArcadeGameInstance initialized (Enhanced Input demo)");
 }
@@ -120,13 +126,13 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 	// Bind action callbacks
 	// ---------------------------------------------------------------
 
-	// Move: set velocity (applied in Update via transform)
+	// Move: set velocity on movement component (applied in component Update)
 	Enigma::FInputActionCallback moveCb;
 	moveCb.Bind([this](const Enigma::FInputActionInstance& inst)
 	{
 		Enigma::FVector v = inst.Value.Get<Enigma::FVector>();
-		m_velX = v.X * m_moveSpeed;
-		m_velY = v.Y * m_moveSpeed;
+		m_movementComp->VelX = v.X * m_movementComp->MoveSpeed;
+		m_movementComp->VelY = v.Y * m_movementComp->MoveSpeed;
 	});
 	InputSubsystem.BindAction(&m_moveAction,
 		Enigma::ETriggerEvent::Triggered, std::move(moveCb));
@@ -185,25 +191,10 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 
 void FArcadeGameInstance::Update(float deltaTime)
 {
-	// Drive scene transitions and component updates.
+	// Movement and bounds clamping are now handled by tick-driven components:
+	//   FArcadeMovementComponent (TG_Update) -- velocity application
+	//   FArcadeBoundsClampComponent (TG_PostUpdate) -- boundary clamping
 	Enigma::FGameInstance::Update(deltaTime);
-
-	// Apply velocity to transform position, then reset velocity.
-	Enigma::FVector pos = m_playerObj->GetTransform().GetPosition();
-	pos.X += m_velX * deltaTime;
-	pos.Y += m_velY * deltaTime;
-	m_velX = 0.0f;
-	m_velY = 0.0f;
-
-	// Clamp to frame buffer bounds (accounting for sprite size).
-	auto& renderer = Enigma::FModuleManager::Get()
-		.GetModuleChecked<Enigma::IAsciiRendererModule>("Renderer");
-	const float maxX = static_cast<float>(renderer.GetFrameBufferWidth()  - m_playerSprite->Width);
-	const float maxY = static_cast<float>(renderer.GetFrameBufferHeight() - m_playerSprite->Height);
-	pos.X = std::clamp(pos.X, 0.0f, maxX);
-	pos.Y = std::clamp(pos.Y, 0.0f, maxY);
-
-	m_playerObj->GetTransform().SetPosition(pos);
 }
 
 void FArcadeGameInstance::Render()
