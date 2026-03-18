@@ -1,6 +1,7 @@
 // Copyright EnigmaEngine. All Rights Reserved.
 
 #include "Engine/Engine.h"
+#include "TickSystem/TickTaskManager.h"
 
 #include <chrono>
 #include <cstdio>
@@ -15,6 +16,10 @@ FEngine* GEngine = nullptr;
 void FEngine::Init(FEngineLoop* /*engineLoop*/)
 {
     std::printf("[FEngine] Init\n");
+
+    // Register engine-owned subsystems before Initialize
+    SubsystemCollection.RegisterSubsystem<FTickTaskManager>();
+
     SubsystemCollection.Initialize();
 }
 

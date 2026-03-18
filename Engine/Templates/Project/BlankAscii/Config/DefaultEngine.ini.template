@@ -9,3 +9,9 @@ MaxFPS=30
 
 [/Script/Engine.RendererSettings]
 DefaultRenderer=AsciiRenderer
+
+[/Script/Engine.TickSystem]
+; bSingleThreaded: true = all ticks on game thread (fallback/debug mode)
+bSingleThreaded=false
+; WorkerThreadCount: 0 = auto (hardware_concurrency - 1)
+WorkerThreadCount=0
