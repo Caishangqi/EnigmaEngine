@@ -44,4 +44,9 @@ set(CORE_ASYNC_SOURCES
     "${_CORE_PRIVATE}/Async/TaskGraph.cpp"
 )
 
+set(CORE_TICKER_SOURCES
+    "${_CORE_PRIVATE}/Containers/Ticker.cpp"
+    "${_CORE_PRIVATE}/Delegates/DelegateHandle.cpp"
+)
+
 unset(_CORE_PRIVATE)
