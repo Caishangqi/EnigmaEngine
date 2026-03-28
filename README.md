@@ -35,10 +35,13 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - Game object framework: FScene / FGameObject / FComponent hierarchy with lifecycle hooks (OnAttach, BeginPlay, Update, OnDetach), scene-driven BeginPlay dispatch following UE5 patterns, and dynamic object support
 - Enhanced Input system: action-based input with triggers (Pressed/Released/Down), modifiers (Negate/Swizzle/DeadZone/Scalar), and mapping contexts with priority support
 - ASCII renderer: frame-buffer based ASCII art rendering with Z-depth sorting, scene view camera, Y-up coordinate convention, and VT100 terminal output
+- Thread-safe ticker: FTSTicker frame-level callback system with thread-safe pending queue, supporting one-shot and recurring delegates
+- Directory watcher: real-time file system monitoring via Windows overlapped I/O + APC, no background threads, integrated with FTSTicker for frame-driven polling
+- DLL hot-reload: versioned DLL hot-reload system (-0001, -0002 suffixes) matching UE's pattern, with automatic detection when building from IDE while engine is running
 
 ## Planned Features
 
-- Game Editor with hot-reload support for game module and plugin DLLs
+- Game Editor with full hot-reload integration for game module and plugin DLLs (currently runtime-only with GameInstance recreation workaround)
 - Integration of `create-module`, `create-plugin` and other build actions into the Game Editor
 - Decouple renderer initialization from window creation via a Viewport abstraction layer (similar to UE's RHI / GameViewport split), enabling multiple render backends (DX12, Vulkan)
 
@@ -124,13 +127,15 @@ The EXE locates game DLLs at runtime via `--project-dir=` command line argument 
 
 | **Name** | **Description** | **Status** |
 |----------|:---------------:|:----------:|
-| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), INI config system (FConfigCacheIni, GConfig), core math types (FVector, FMatrix, FQuat, FRotator, FTransform), and async task infrastructure (FThreadPool, FTaskGraph) | stable |
+| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), INI config system (FConfigCacheIni, GConfig), core math types (FVector, FMatrix, FQuat, FRotator, FTransform), async task infrastructure (FThreadPool, FTaskGraph), and FTSTicker thread-safe frame ticker | stable |
 | `Enigma::ApplicationCore` | Platform-agnostic application and window abstraction (FGenericApplication, FGenericWindow, FGenericApplicationMessageHandler) with Win32 implementation | stable |
 | `Enigma::RenderCore` | Renderer interface abstraction layer (IRendererModule) decoupling engine from concrete renderer implementations | stable |
 | `Enigma::AsciiRenderer` | ASCII art renderer with frame-buffer, Z-depth sorting, scene view camera, and VT100 terminal output | stable |
 | `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine with config-driven window creation, FGameInstance, SubsystemCollection, FTickTaskManager tick scheduling, FScene/FGameObject/FComponent game object framework with scene-driven BeginPlay lifecycle, and module loading phase management | stable |
 | `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
 | `Enigma::EnhancedInput` | Action-based input system with triggers, modifiers, and mapping contexts (engine plugin) | stable |
+| `Enigma::DirectoryWatcher` | Real-time file system monitoring via Windows overlapped I/O + APC, integrated with FTSTicker (developer tool, excluded from Shipping) | stable |
+| `Enigma::HotReload` | Versioned DLL hot-reload system matching UE's pattern, with automatic IDE build detection (developer tool, excluded from Shipping) | stable |
 
 ## Third Party
 
@@ -155,6 +160,9 @@ EnigmaEngine/
         AsciiRenderer/             ASCII frame-buffer renderer with Z-depth & scene camera
         Engine/                    Engine loop, GameEngine, GameInstance, SubsystemCollection, TickSystem, Scene/GameObject/Component
         Launch/                    Entry point (GuardedMain, main/WinMain)
+      Developer/                 Developer tools (excluded from Shipping builds)
+        DirectoryWatcher/          Real-time file system monitoring (Windows overlapped I/O)
+        HotReload/                 Versioned DLL hot-reload system
       ThirdParty/                Third-party libraries (nlohmann_json, googletest)
       Programs/
         BuildTool/               C# .NET 9 CLI build tool
@@ -188,6 +196,9 @@ EnigmaEngine/
     Engine.Tests/                Engine module tests (GoogleTest)
     Engine.TickSystem.Tests/     Tick system unit tests (GoogleTest)
     EnhancedInput.Tests/         Enhanced Input system tests (GoogleTest)
+    Core.Ticker.Tests/           FTSTicker unit tests (GoogleTest, 11 tests)
+    DirectoryWatcher.Tests/      DirectoryWatcher module tests (GoogleTest, 7 tests)
+    HotReload.Tests/             HotReload module tests (GoogleTest, 7 tests)
     DllExportMacroTest/          DLL export macro validation
     ModuleInterfaceTest/         Module interface integration test
     ModuleManagerTest/           Module manager integration test

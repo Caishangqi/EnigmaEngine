@@ -35,10 +35,13 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - 游戏对象框架：FScene / FGameObject / FComponent 层级结构，生命周期钩子（OnAttach、BeginPlay、Update、OnDetach），遵循 UE5 模式的场景驱动 BeginPlay 分发，支持动态对象
 - 增强输入系统：基于动作的输入系统，支持触发器（Pressed/Released/Down）、修饰器（Negate/Swizzle/DeadZone/Scalar）和带优先级的映射上下文
 - ASCII 渲染器：基于帧缓冲的 ASCII 字符渲染，Z 深度排序、场景视图摄像机、Y-up 坐标约定、VT100 终端输出
+- 线程安全定时器：FTSTicker 帧级回调系统，线程安全的待处理队列，支持单次和循环委托
+- 目录监控：通过 Windows overlapped I/O + APC 实现实时文件系统监控，无后台线程，与 FTSTicker 集成实现帧驱动轮询
+- DLL 热重载：版本化 DLL 热重载系统（-0001、-0002 后缀），匹配 UE 模式，支持从 IDE 构建时自动检测引擎运行状态
 
 ## 计划中的特性
 
-- 引入支持模块和插件 DLL 热重载的游戏编辑器
+- 引入支持模块和插件 DLL 完整热重载集成的游戏编辑器（当前仅运行时支持，使用 GameInstance 重建作为临时方案）
 - 将 `create-module`、`create-plugin` 等构建操作集成到游戏编辑器中
 - 通过 Viewport 抽象层将渲染器初始化与窗口创建解耦（类似 UE 的 RHI / GameViewport 分离），以支持多渲染后端（DX12、Vulkan）
 
@@ -124,13 +127,15 @@ EXE 通过 `--project-dir=` 命令行参数在运行时定位游戏 DLL（VS 调
 
 | **名称** | **说明** | **状态** |
 |----------|:--------:|:--------:|
-| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）、INI 配置系统（FConfigCacheIni、GConfig）、核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform）和异步任务基础设施（FThreadPool、FTaskGraph） | stable |
+| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）、INI 配置系统（FConfigCacheIni、GConfig）、核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform）、异步任务基础设施（FThreadPool、FTaskGraph）和 FTSTicker 线程安全帧定时器 | stable |
 | `Enigma::ApplicationCore` | 平台无关的应用程序和窗口抽象（FGenericApplication、FGenericWindow、FGenericApplicationMessageHandler），含 Win32 实现 | stable |
 | `Enigma::RenderCore` | 渲染器接口抽象层（IRendererModule），将引擎与具体渲染器实现解耦 | stable |
 | `Enigma::AsciiRenderer` | ASCII 字符渲染器，帧缓冲、Z 深度排序、场景视图摄像机、VT100 终端输出 | stable |
 | `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine 配置驱动窗口创建、FGameInstance 游戏实例、SubsystemCollection 子系统集合、FTickTaskManager Tick 调度、FScene/FGameObject/FComponent 游戏对象框架（场景驱动 BeginPlay 生命周期）和模块加载阶段管理 | stable |
 | `Enigma::Launch` | 入口点模块，提供 GuardedMain 守护主函数和平台特定启动逻辑（main / WinMain） | stable |
 | `Enigma::EnhancedInput` | 基于动作的输入系统，支持触发器、修饰器和映射上下文（引擎插件） | stable |
+| `Enigma::DirectoryWatcher` | 通过 Windows overlapped I/O + APC 实现实时文件系统监控，与 FTSTicker 集成（开发者工具，Shipping 构建排除） | stable |
+| `Enigma::HotReload` | 版本化 DLL 热重载系统，匹配 UE 模式，支持 IDE 构建自动检测（开发者工具，Shipping 构建排除） | stable |
 
 ## 第三方库
 
@@ -155,6 +160,9 @@ EnigmaEngine/
         AsciiRenderer/             ASCII 帧缓冲渲染器，Z 深度排序、场景视图摄像机
         Engine/                    引擎循环、GameEngine、GameInstance、SubsystemCollection、TickSystem、Scene/GameObject/Component
         Launch/                    入口点 (GuardedMain, main/WinMain)
+      Developer/                 开发者工具（Shipping 构建排除）
+        DirectoryWatcher/          实时文件系统监控 (Windows overlapped I/O)
+        HotReload/                 版本化 DLL 热重载系统
       ThirdParty/                第三方库 (nlohmann_json, googletest)
       Programs/
         BuildTool/               C# .NET 9 命令行构建工具
@@ -188,6 +196,9 @@ EnigmaEngine/
     Engine.Tests/                Engine 模块测试 (GoogleTest)
     Engine.TickSystem.Tests/     Tick 系统单元测试 (GoogleTest)
     EnhancedInput.Tests/         增强输入系统测试 (GoogleTest)
+    Core.Ticker.Tests/           FTSTicker 单元测试 (GoogleTest, 11 个测试)
+    DirectoryWatcher.Tests/      DirectoryWatcher 模块测试 (GoogleTest, 7 个测试)
+    HotReload.Tests/             HotReload 模块测试 (GoogleTest, 7 个测试)
     DllExportMacroTest/          DLL 导出宏验证
     ModuleInterfaceTest/         模块接口集成测试
     ModuleManagerTest/           模块管理器集成测试
