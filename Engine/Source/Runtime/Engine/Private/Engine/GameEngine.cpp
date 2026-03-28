@@ -146,6 +146,45 @@ FGameInstance* FGameEngine::GetGameInstance() const
     return GameInstance.get();
 }
 
+// [TEST] Hot-reload GameInstance recreation. Remove when Editor exists.
+void FGameEngine::RecreateGameInstance()
+{
+    // Shutdown and destroy old instance.
+    if (GameInstance)
+    {
+        GameInstance->Shutdown();
+        GameInstance.reset();
+    }
+
+    // Flush deferred tick function removals from the destroyed scene/components.
+    // Without this, TickTaskManager holds dangling pointers to destroyed objects.
+    SubsystemCollection.Tick(0.0f);
+
+    // Create new instance using current factory (from reloaded DLL).
+    GameInstance = CreateGameInstance();
+    if (GameInstance)
+    {
+        GameInstance->Init();
+
+        // Reconnect input subsystem.
+        ISubsystem* inputSubsystem = nullptr;
+        SubsystemCollection.ForEachSubsystem([&](ISubsystem* s)
+        {
+            if (std::string(s->GetName()) == "FInputSubsystem")
+            {
+                inputSubsystem = s;
+            }
+        });
+        if (inputSubsystem)
+        {
+            GameInstance->SetupInput(
+                *reinterpret_cast<FInputSubsystem*>(inputSubsystem));
+        }
+
+        std::printf("[FGameEngine] [TEST] GameInstance recreated after hot-reload\n");
+    }
+}
+
 std::unique_ptr<FGameInstance> FGameEngine::CreateGameInstance()
 {
     if (s_GameInstanceFactory)

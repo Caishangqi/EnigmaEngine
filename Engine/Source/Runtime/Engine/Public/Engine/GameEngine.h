@@ -44,6 +44,11 @@ public:
     /// Get the game window created during Init. May be nullptr in headless mode.
     FGenericWindow* GetGameWindow() const { return m_gameWindow; }
 
+    // [TEST] Recreate GameInstance after hot-reload. Destroys old instance,
+    // creates new one using current factory (from reloaded DLL), calls Init.
+    // Remove when Editor exists and handles object reconstruction.
+    void RecreateGameInstance();
+
 protected:
     /// Factory method -- uses registered factory if available,
     /// otherwise falls back to base FGameInstance.

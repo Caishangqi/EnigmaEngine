@@ -5,6 +5,7 @@
 #include "Engine/GameEngine.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "Modules/ModuleManager.h"
+#include "Containers/Ticker.h"
 #include "CoreGlobals.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/ConfigDelegates.h"
@@ -55,6 +56,14 @@ struct FDiscoveredPlugin
     std::string PluginName;
     std::string PluginRoot;   // directory containing .eplugin
     std::vector<FDescriptorModuleEntry> Modules;
+
+    /// Where this plugin was found (matching UE's EPluginLoadedFrom).
+    enum class ELoadedFrom : uint8_t
+    {
+        Engine,   // Found in {EngineRoot}/Plugins/
+        Project,  // Found in {ProjectRoot}/Plugins/
+    };
+    ELoadedFrom LoadedFrom = ELoadedFrom::Engine;
 };
 
 /// Find the first .eproject file in the given directory and parse
@@ -217,9 +226,11 @@ DiscoverPlugins(
     {
         // Search project plugins first, then engine plugins
         std::filesystem::path pluginDir = FindPluginDir(projectPluginsDir, pluginName);
+        FDiscoveredPlugin::ELoadedFrom loadedFrom = FDiscoveredPlugin::ELoadedFrom::Project;
         if (pluginDir.empty())
         {
             pluginDir = FindPluginDir(enginePluginsDir, pluginName);
+            loadedFrom = FDiscoveredPlugin::ELoadedFrom::Engine;
         }
 
         if (pluginDir.empty())
@@ -238,6 +249,7 @@ DiscoverPlugins(
         plugin.PluginName = pluginName;
         plugin.PluginRoot = std::filesystem::canonical(pluginDir).string();
         plugin.Modules    = std::move(modules);
+        plugin.LoadedFrom = loadedFrom;
 
         ENIGMA_LOG(LogInit, Info, "Discovered plugin '{}' at '{}' ({} module(s))",
             plugin.PluginName, plugin.PluginRoot,
@@ -630,6 +642,13 @@ int32_t FEngineLoop::Init()
 
     // Phase 4: PostEngineInit (plugins, late modules)
     // Loaded AFTER GEngine->Init() so modules can access fully initialized engine.
+
+    // Register Developer modules for PostEngineInit (not in Shipping builds).
+#if !ENIGMA_BUILD_SHIPPING
+    AddModuleToPhase(ELoadingPhase::PostEngineInit, "DirectoryWatcher");
+    AddModuleToPhase(ELoadingPhase::PostEngineInit, "HotReload");
+#endif
+
     LoadModulesForPhase(ELoadingPhase::PostEngineInit);
 
     // Start engine (initializes GameInstance, begins game loop)
@@ -669,6 +688,9 @@ void FEngineLoop::Tick()
 
     // Engine tick
     GEngine->Tick(DeltaTime);
+
+    // Ticker tick -- drives DirectoryWatcher, HotReload, etc.
+    FTSTicker::GetCoreTicker().Tick(DeltaTime);
 
     ++FrameNumber;
 }
