@@ -26,6 +26,7 @@ struct FModuleInfo
     void*                    DllHandle = nullptr;
     std::unique_ptr<IModuleInterface> Module;
     int32_t                  LoadOrder = 0;
+    std::string              DllFilePath;  // Full path to the loaded DLL
 };
 
 // ---------------------------------------------------------------
@@ -111,6 +112,15 @@ public:
     /// ScanDllsFromDirectory() uses this to find {TargetName}.modules
     /// and load only the DLLs listed in the manifest.
     void SetTargetName(const std::string& name) { TargetName = name; }
+
+    // ----- Hot-reload support -----
+
+    /// Load a DLL into the process by full path. Returns the handle, or nullptr.
+    /// Does NOT initialize any modules -- use LoadModule() after this.
+    static void* LoadDllFromPath(const char* path);
+
+    /// Returns the DLL file path for a loaded module, or empty string if not found.
+    std::string GetModuleDllPath(std::string_view name) const;
 
 private:
     FModuleManager() = default;

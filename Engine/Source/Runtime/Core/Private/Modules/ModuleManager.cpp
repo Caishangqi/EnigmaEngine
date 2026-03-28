@@ -107,92 +107,107 @@ void FModuleManager::AddDllSearchPath(const std::string& path)
 // ---------------------------------------------------------------
 IModuleInterface* FModuleManager::LoadModule(std::string_view name)
 {
-    std::lock_guard<std::mutex> lock(Mutex);
-
     std::string key(name);
-
-    // Already loaded? Return existing instance.
-    auto it = Modules.find(key);
-    if (it != Modules.end() && it->second.Module)
-    {
-        return it->second.Module.get();
-    }
-
-    // Step 1: Check if the module initializer is already registered
-    //         (DLL may have been implicitly linked by the executable).
-    FInitializeModuleFunctionPtr initFn =
-        FModuleInitializerEntry::FindModule(key.c_str());
-
+    IModuleInterface* rawModule = nullptr;
     void* dllHandle = nullptr;
+    std::string dllFilePath;
 
-    if (!initFn)
+    // Phase 1: Find/load DLL and create module instance (under lock).
     {
-        // Step 2: Entry not found -- try to load the DLL explicitly.
-        std::string dllName = PlatformDllPath(name);
-        dllHandle = PlatformLoadDll(dllName.c_str());
+        std::lock_guard<std::mutex> lock(Mutex);
 
-        // If default path failed, try each registered search path.
-        if (!dllHandle)
+        // Already loaded? Return existing instance.
+        auto it = Modules.find(key);
+        if (it != Modules.end() && it->second.Module)
         {
-            for (const auto& searchPath : DllSearchPaths)
-            {
-                std::string fullPath = searchPath;
-                if (!fullPath.empty() && fullPath.back() != '/' && fullPath.back() != '\\')
-                {
-                    fullPath += '/';
-                }
-                fullPath += dllName;
+            return it->second.Module.get();
+        }
 
-                dllHandle = PlatformLoadDll(fullPath.c_str());
-                if (dllHandle)
+        // Step 1: Check if the module initializer is already registered
+        //         (DLL may have been implicitly linked by the executable).
+        FInitializeModuleFunctionPtr initFn =
+            FModuleInitializerEntry::FindModule(key.c_str());
+
+        if (!initFn)
+        {
+            // Step 2: Entry not found -- try to load the DLL explicitly.
+            std::string dllName = PlatformDllPath(name);
+            dllHandle = PlatformLoadDll(dllName.c_str());
+            if (dllHandle)
+            {
+                dllFilePath = dllName;
+            }
+
+            // If default path failed, try each registered search path.
+            if (!dllHandle)
+            {
+                for (const auto& searchPath : DllSearchPaths)
                 {
-                    ENIGMA_LOG(LogModuleManager, Info, "Loaded '{}' from search path '{}'",
-                        key, searchPath);
-                    break;
+                    std::string fullPath = searchPath;
+                    if (!fullPath.empty() && fullPath.back() != '/' && fullPath.back() != '\\')
+                    {
+                        fullPath += '/';
+                    }
+                    fullPath += dllName;
+
+                    dllHandle = PlatformLoadDll(fullPath.c_str());
+                    if (dllHandle)
+                    {
+                        dllFilePath = fullPath;
+                        ENIGMA_LOG(LogModuleManager, Info, "Loaded '{}' from search path '{}'",
+                            key, searchPath);
+                        break;
+                    }
                 }
+            }
+
+            if (!dllHandle)
+            {
+                ENIGMA_LOG(LogModuleManager, Error,
+                    "Failed to load DLL '{}' (searched {} additional path(s))",
+                    dllName, DllSearchPaths.size());
+                return nullptr;
+            }
+
+            // Now find the initializer (DLL static constructors should have registered it).
+            initFn = FModuleInitializerEntry::FindModule(key.c_str());
+            if (!initFn)
+            {
+                ENIGMA_LOG(LogModuleManager, Error,
+                    "Module '{}' loaded but no initializer found (missing IMPLEMENT_MODULE?)",
+                    key);
+                PlatformFreeDll(dllHandle);
+                return nullptr;
             }
         }
 
-        if (!dllHandle)
+        // Step 3: Create the module instance.
+        rawModule = initFn();
+        if (!rawModule)
         {
-            ENIGMA_LOG(LogModuleManager, Error,
-                "Failed to load DLL '{}' (searched {} additional path(s))",
-                dllName, DllSearchPaths.size());
+            ENIGMA_LOG(LogModuleManager, Error, "Initializer for '{}' returned null", key);
+            if (dllHandle) PlatformFreeDll(dllHandle);
             return nullptr;
         }
 
-        // Now find the initializer (DLL static constructors should have registered it).
-        initFn = FModuleInitializerEntry::FindModule(key.c_str());
-        if (!initFn)
-        {
-            ENIGMA_LOG(LogModuleManager, Error,
-                "Module '{}' loaded but no initializer found (missing IMPLEMENT_MODULE?)",
-                key);
-            PlatformFreeDll(dllHandle);
-            return nullptr;
-        }
-    }
+        // Step 4: Store in map BEFORE calling StartupModule (matching UE pattern).
+        // This allows StartupModule to call IsModuleLoaded/GetModule on other modules.
+        FModuleInfo info;
+        info.Name        = key;
+        info.DllHandle   = dllHandle;
+        info.Module      = std::unique_ptr<IModuleInterface>(rawModule);
+        info.LoadOrder   = NextLoadOrder++;
+        info.DllFilePath = std::move(dllFilePath);
 
-    // Step 3: Create the module instance.
-    IModuleInterface* rawModule = initFn();
-    if (!rawModule)
-    {
-        ENIGMA_LOG(LogModuleManager, Error, "Initializer for '{}' returned null", key);
-        if (dllHandle) PlatformFreeDll(dllHandle);
-        return nullptr;
+        Modules.emplace(key, std::move(info));
     }
+    // Lock released here.
 
-    // Step 4: Call StartupModule and store.
+    // Step 5: Call StartupModule WITHOUT holding the lock (matching UE pattern).
+    // This allows StartupModule to call LoadModule/IsModuleLoaded without deadlock.
     rawModule->StartupModule();
 
-    FModuleInfo info;
-    info.Name      = key;
-    info.DllHandle = dllHandle;  // nullptr for implicitly linked modules
-    info.Module    = std::unique_ptr<IModuleInterface>(rawModule);
-    info.LoadOrder = NextLoadOrder++;
-
-    auto [insertIt, _] = Modules.emplace(key, std::move(info));
-    return insertIt->second.Module.get();
+    return rawModule;
 }
 
 // ---------------------------------------------------------------
@@ -450,6 +465,29 @@ IModuleInterface* FModuleManager::GetModule(std::string_view name)
         return it->second.Module.get();
     }
     return nullptr;
+}
+
+// ---------------------------------------------------------------
+// LoadDllFromPath -- public wrapper for PlatformLoadDll
+// ---------------------------------------------------------------
+void* FModuleManager::LoadDllFromPath(const char* path)
+{
+    return PlatformLoadDll(path);
+}
+
+// ---------------------------------------------------------------
+// GetModuleDllPath
+// ---------------------------------------------------------------
+std::string FModuleManager::GetModuleDllPath(std::string_view name) const
+{
+    std::lock_guard<std::mutex> lock(Mutex);
+    std::string key(name);
+    auto it = Modules.find(key);
+    if (it != Modules.end())
+    {
+        return it->second.DllFilePath;
+    }
+    return {};
 }
 
 } // namespace Enigma
