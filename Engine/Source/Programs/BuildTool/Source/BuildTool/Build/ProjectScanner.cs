@@ -221,6 +221,28 @@ public static class ProjectScanner
             }
         }
 
+        // Also scan Engine/Source/Developer/ for developer tool modules.
+        string developerDir = Path.Combine(engineRoot, "Source", "Developer");
+        if (Directory.Exists(developerDir))
+        {
+            foreach (var moduleDir in Directory.GetDirectories(developerDir))
+            {
+                var buildCs = Directory.GetFiles(moduleDir, "*.Build.cs").FirstOrDefault();
+                if (buildCs is null) continue;
+
+                try
+                {
+                    var rules = ModuleParser.Parse(buildCs);
+                    rules.ModuleDirectory = moduleDir;
+                    modules[rules.ModuleName] = rules;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"  Warning: Failed to parse {buildCs}: {ex.Message}");
+                }
+            }
+        }
+
         return modules;
     }
 

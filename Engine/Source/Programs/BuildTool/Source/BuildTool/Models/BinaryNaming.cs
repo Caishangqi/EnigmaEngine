@@ -100,4 +100,68 @@ public static class BinaryNaming
 
         return $"{prefix}-{moduleName}-{platform}-{configuration}";
     }
+
+    // ── Hot-Reload Versioned DLL Naming ──
+
+    /// <summary>
+    /// Get a versioned DLL filename for hot-reload builds.
+    /// Inserts <c>-{suffix:D4}</c> before <c>.dll</c>.
+    ///   Development: {Prefix}-{Module}-0001.dll
+    ///   Others:      {Prefix}-{Module}-{Platform}-{Config}-0001.dll
+    /// </summary>
+    public static string GetHotReloadDllFileName(
+        string projectName, string moduleName,
+        BuildConfiguration configuration, string platform, int suffix)
+    {
+        string baseName = GetOutputName(projectName, moduleName, configuration, platform);
+        return $"{baseName}-{suffix:D4}.dll";
+    }
+
+    /// <summary>
+    /// Check if a DLL filename has a hot-reload suffix (<c>-NNNN.dll</c>).
+    /// </summary>
+    public static bool HasHotReloadSuffix(string dllFileName)
+    {
+        // Match pattern: -NNNN.dll at end of filename
+        string name = Path.GetFileNameWithoutExtension(dllFileName);
+        if (name.Length < 5) return false;
+        if (name[name.Length - 5] != '-') return false;
+        for (int i = 1; i <= 4; i++)
+        {
+            if (!char.IsAsciiDigit(name[name.Length - i]))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Strip the hot-reload suffix from a DLL filename.
+    /// Returns the original filename, or the input unchanged if no suffix found.
+    ///   "EnigmaEngine-MyGame-0001.dll" → "EnigmaEngine-MyGame.dll"
+    /// </summary>
+    public static string StripHotReloadSuffix(string dllFileName)
+    {
+        if (!HasHotReloadSuffix(dllFileName))
+            return dllFileName;
+
+        string ext = Path.GetExtension(dllFileName);
+        string name = Path.GetFileNameWithoutExtension(dllFileName);
+        // Remove last 5 chars: "-NNNN"
+        string stripped = name[..^5];
+        return stripped + ext;
+    }
+
+    /// <summary>
+    /// Extract the numeric hot-reload suffix from a DLL filename.
+    /// Returns null if no suffix found.
+    /// </summary>
+    public static int? ExtractHotReloadSuffix(string dllFileName)
+    {
+        if (!HasHotReloadSuffix(dllFileName))
+            return null;
+
+        string name = Path.GetFileNameWithoutExtension(dllFileName);
+        string digits = name[^4..];
+        return int.TryParse(digits, out int result) ? result : null;
+    }
 }

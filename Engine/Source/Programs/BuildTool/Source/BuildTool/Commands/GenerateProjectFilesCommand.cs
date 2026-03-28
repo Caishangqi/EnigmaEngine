@@ -367,7 +367,8 @@ public sealed class GenerateProjectFilesCommand : ICommand
         content = string.Join("\r\n",
             content.Split('\n').Select(line => line.TrimStart()));
 
-        AtomicFileWriter.WriteIfChanged(batPath, content);
+        // Write without BOM -- Windows cmd.exe does not handle UTF-8 BOM in .bat files.
+        File.WriteAllText(batPath, content, new System.Text.UTF8Encoding(false));
         Console.WriteLine($"  Script:   {batPath}");
     }
 }

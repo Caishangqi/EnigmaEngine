@@ -118,7 +118,7 @@ public static class CreateProjectCommandTest
                 Path.Combine(location, "BarGame", "GenerateProjectFiles.bat"));
             Assert(content.Contains("BarGame.eproject"), "Should reference project .eproject");
             Assert(content.Contains("generate-project-files"), "Should invoke generate-project-files");
-            Assert(content.Contains("ENGINE_ROOT="), "Should set ENGINE_ROOT");
+            Assert(content.Contains("BuildTool.csproj"), "Should reference BuildTool.csproj");
 
             Console.WriteLine("  PASSED");
         }

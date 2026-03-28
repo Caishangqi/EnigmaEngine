@@ -128,6 +128,119 @@ public static class PostBuildStep
     }
 
     /// <summary>
+    /// Execute hot-reload post-build: copy game/plugin DLLs with versioned names.
+    /// Does NOT overwrite original DLLs (they are locked by the running engine).
+    /// Does NOT regenerate manifests (engine does not re-read them during hot reload).
+    /// </summary>
+    public static BuildResult ExecuteHotReload(PostBuildContext context)
+    {
+        var config = context.BuildOptions.Configuration;
+        var platform = context.BuildOptions.Platform;
+        string projectName = context.ProjectName;
+        var scan = context.ScanResult;
+
+        Console.WriteLine("[PostBuild] Mode: HotReload (versioned DLL output)");
+
+        try
+        {
+            // Load or create hot-reload state.
+            string statePath = HotReloadState.GetStateFilePath(scan.ProjectRoot);
+            var state = HotReloadState.Load(statePath);
+            int suffix = state.NextSuffix;
+
+            Console.WriteLine($"[PostBuild] Hot-reload suffix: {suffix:D4}");
+
+            // Build the output directory map (reuse existing logic).
+            var fileOutputMap = BuildOutputDirectoryMap(scan, projectName, config, platform);
+
+            // Collect hot-reloadable module DLL names (game + project plugins only).
+            var hotReloadDlls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (name, _) in scan.GameModules)
+            {
+                var dllName = ManifestGenerator.GetDllFileName(projectName, name, config, platform);
+                if (fileOutputMap.TryGetValue(dllName, out var outputDir))
+                    hotReloadDlls[dllName] = outputDir;
+            }
+
+            foreach (var (pluginName, descriptor) in scan.PluginScanResult.EnabledPlugins)
+            {
+                // Only project plugins (not engine plugins).
+                string pluginDir = Path.GetDirectoryName(descriptor.SourceFilePath)!;
+                string normalizedPluginDir = pluginDir.Replace('\\', '/');
+                string normalizedEngineRoot = scan.EngineRoot.Replace('\\', '/');
+                if (normalizedPluginDir.StartsWith(normalizedEngineRoot, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                foreach (var moduleDesc in descriptor.Modules)
+                {
+                    var dllName = ManifestGenerator.GetDllFileName(projectName, moduleDesc.Name, config, platform);
+                    if (fileOutputMap.TryGetValue(dllName, out var outputDir))
+                        hotReloadDlls[dllName] = outputDir;
+                }
+            }
+
+            if (hotReloadDlls.Count == 0)
+            {
+                return BuildResult.Ok("No hot-reloadable modules found");
+            }
+
+            // Copy versioned DLLs and PDBs.
+            int copied = 0;
+            foreach (var (originalDllName, outputDir) in hotReloadDlls)
+            {
+                Directory.CreateDirectory(outputDir);
+
+                // Find the built DLL in CMake output.
+                string? builtDll = FindFiles(context.CmakeBuildDir, originalDllName).FirstOrDefault();
+                if (builtDll is null)
+                {
+                    Console.WriteLine($"  [Skip] {originalDllName} (not found in build output)");
+                    continue;
+                }
+
+                // Compute versioned filename.
+                string stem = Path.GetFileNameWithoutExtension(originalDllName);
+                string versionedDllName = $"{stem}-{suffix:D4}.dll";
+                string versionedDllPath = Path.Combine(outputDir, versionedDllName);
+
+                File.Copy(builtDll, versionedDllPath, overwrite: true);
+                Console.WriteLine($"  [HotReload] {versionedDllName}");
+                copied++;
+
+                // Copy PDB if exists.
+                string pdbName = Path.ChangeExtension(originalDllName, ".pdb");
+                string? builtPdb = FindFiles(context.CmakeBuildDir, pdbName).FirstOrDefault();
+                if (builtPdb is not null)
+                {
+                    string versionedPdbName = $"{stem}-{suffix:D4}.pdb";
+                    string versionedPdbPath = Path.Combine(outputDir, versionedPdbName);
+                    File.Copy(builtPdb, versionedPdbPath, overwrite: true);
+                    Console.WriteLine($"  [HotReload] {versionedPdbName}");
+                    copied++;
+                }
+
+                state.OriginalToVersioned[originalDllName] = versionedDllName;
+            }
+
+            // Save updated state.
+            state.NextSuffix = suffix + 1;
+            HotReloadState.Save(state, statePath);
+            Console.WriteLine($"[PostBuild] State saved (next suffix: {state.NextSuffix:D4})");
+
+            return BuildResult.Ok($"Hot-reload completed: {copied} file(s) with suffix -{suffix:D4}");
+        }
+        catch (IOException ex)
+        {
+            return BuildResult.Fail("Hot-reload post-build failed", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return BuildResult.Fail("Hot-reload post-build failed", ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Copy modular binaries to categorized output directories based on module type.
     /// Engine modules → Engine/Binaries/, Game modules → Project/Binaries/,
     /// Plugin modules → Plugins/{Name}/Binaries/.

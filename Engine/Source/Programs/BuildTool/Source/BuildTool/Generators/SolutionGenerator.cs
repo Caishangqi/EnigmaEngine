@@ -72,6 +72,7 @@ public sealed class SolutionGenerator
             string pluginsFolderGuid  = FormatGuid(GuidGenerator.GenerateForFolder("Plugins"));
             string enginePluginsFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Plugins"));
             string runtimeFolderGuid   = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Runtime"));
+            string developerFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Developer"));
             string thirdPartyFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/ThirdParty"));
             string programsFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Programs"));
 
@@ -80,6 +81,7 @@ public sealed class SolutionGenerator
                 (engineFolderGuid,   "Engine",           null),
                 (engineSrcGuid,      "Source",            engineFolderGuid),
                 (runtimeFolderGuid,  "Runtime",           engineSrcGuid),
+                (developerFolderGuid, "Developer",        engineSrcGuid),
                 (thirdPartyFolderGuid, "ThirdParty",     engineSrcGuid),
                 (enginePluginsFolderGuid, "Plugins",     engineFolderGuid),
                 (gamesFolderGuid,    "Games",             null),
@@ -171,14 +173,18 @@ public sealed class SolutionGenerator
             var engineModulesSorted = input.EngineModules
                 .OrderByDescending(kv => kv.Key == "Launch")
                 .ToList();
-            foreach (var (moduleName, _) in engineModulesSorted)
+            foreach (var (moduleName, rules) in engineModulesSorted)
             {
                 string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
                 string vcxprojRelative = $"{engineIntermediateRel}\\{moduleName}.vcxproj";
                 var deps = GetProjectDependencies(moduleName, input.ResolveResult, knownProjectNames);
 
                 WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, vcxprojRelative, projGuid, deps);
-                nesting.Add((projGuid, runtimeFolderGuid));
+
+                // Place Developer modules under Developer folder, others under Runtime.
+                bool isDeveloper = !string.IsNullOrEmpty(rules.ModuleDirectory)
+                    && rules.ModuleDirectory.Replace('\\', '/').Contains("/Developer/");
+                nesting.Add((projGuid, isDeveloper ? developerFolderGuid : runtimeFolderGuid));
                 projectCount++;
             }
 

@@ -102,14 +102,38 @@ public sealed class BuildPipeline
         Console.WriteLine("  Build: OK");
 
         // [6] Post-build step
-        Console.WriteLine("[Step 5/6] Running post-build step ...");
-        var postBuildResult = PostBuildStep.Execute(new PostBuildContext
+        bool isHotReload = options.ExtraArguments.ContainsKey("hot-reload");
+
+        // Auto-detect hot-reload: if the engine exe is locked (running),
+        // automatically switch to hot-reload mode (matching UE's behavior
+        // where building from the editor auto-enables hot-reload).
+        if (!isHotReload)
+        {
+            string engineOutputDir = Path.Combine(scan.EngineRoot, "Binaries", options.Platform);
+            string exeName = $"{BinaryNaming.GetExecutableOutputName(scan.ProjectName, options.Configuration, options.Platform)}.exe";
+            string exePath = Path.Combine(engineOutputDir, exeName);
+            if (File.Exists(exePath) && IsFileLocked(exePath))
+            {
+                Console.WriteLine("[PostBuild] Engine exe is locked (running) -- auto-switching to hot-reload mode");
+                isHotReload = true;
+            }
+        }
+
+        Console.WriteLine(isHotReload
+            ? "[Step 5/6] Running hot-reload post-build step ..."
+            : "[Step 5/6] Running post-build step ...");
+
+        var postBuildContext = new PostBuildContext
         {
             CmakeBuildDir = buildDir,
             ProjectName = scan.ProjectName,
             ScanResult = scan,
             BuildOptions = options,
-        });
+        };
+
+        var postBuildResult = isHotReload
+            ? PostBuildStep.ExecuteHotReload(postBuildContext)
+            : PostBuildStep.Execute(postBuildContext);
 
         if (!postBuildResult.Success)
             return Fail("Post-build failed", postBuildResult.ErrorDetail, sw);
@@ -153,6 +177,18 @@ public sealed class BuildPipeline
 
         foreach (var name in scan.GameTarget.ExtraModuleNames)
             roots.Add(name);
+
+        // Include DeveloperTool modules as roots (they are loaded at runtime
+        // via LoadModule, not referenced by static dependencies).
+        // Excluded from Shipping builds. Only engine modules, not ThirdParty.
+        if (config != BuildConfiguration.Shipping)
+        {
+            foreach (var (name, rules) in scan.EngineModules)
+            {
+                if (rules.Type == ModuleType.DeveloperTool)
+                    roots.Add(name);
+            }
+        }
 
         // Filter to only reachable modules via dependency graph BFS
         var reachable = DependencyResolver.ComputeReachableSet(
@@ -290,5 +326,21 @@ public sealed class BuildPipeline
 
         File.WriteAllText(path, content);
         return true;
+    }
+
+    /// <summary>
+    /// Check if a file is locked by another process (e.g., running engine exe).
+    /// </summary>
+    private static bool IsFileLocked(string filePath)
+    {
+        try
+        {
+            using var stream = File.Open(filePath, FileMode.Open, FileAccess.Write, FileShare.None);
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
     }
 }
