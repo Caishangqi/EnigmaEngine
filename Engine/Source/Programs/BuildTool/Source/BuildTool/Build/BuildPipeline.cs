@@ -86,6 +86,19 @@ public sealed class BuildPipeline
             string statePath = HotReloadState.GetStateFilePath(scan.ProjectRoot);
             var state = HotReloadState.Load(statePath);
             hotReloadSuffix = state.NextSuffix;
+
+            // Skip suffixes whose PDB files are locked in the intermediate build directory
+            // (e.g., debugger holding PDBs from a previous hot-reload session).
+            hotReloadSuffix = FindAvailableHotReloadSuffix(buildDir, hotReloadSuffix);
+
+            // Persist the advanced suffix so PostBuildStep uses the same value.
+            if (hotReloadSuffix != state.NextSuffix)
+            {
+                Console.WriteLine($"[Build] Suffix {state.NextSuffix:D4} has locked PDB(s), advanced to {hotReloadSuffix:D4}");
+                state.NextSuffix = hotReloadSuffix;
+                HotReloadState.Save(state, statePath);
+            }
+
             Console.WriteLine($"[Build] Hot-reload suffix: {hotReloadSuffix:D4}, modules: {string.Join(", ", hotReloadModuleNames)}");
         }
 
@@ -365,6 +378,50 @@ public sealed class BuildPipeline
         {
             return true;
         }
+    }
+
+    /// <summary>
+    /// Find a hot-reload suffix whose PDB files are not locked in the intermediate build directory.
+    /// When the debugger holds PDBs from a previous session, the linker cannot overwrite them (LNK1201).
+    /// This advances the suffix past any locked files.
+    /// </summary>
+    private static int FindAvailableHotReloadSuffix(string buildDir, int startSuffix)
+    {
+        if (!Directory.Exists(buildDir))
+            return startSuffix;
+
+        const int maxAttempts = 100;
+        int suffix = startSuffix;
+
+        for (int i = 0; i < maxAttempts; i++, suffix++)
+        {
+            string suffixStr = $"-{suffix:D4}.pdb";
+            bool anyLocked = false;
+
+            try
+            {
+                foreach (var pdbFile in Directory.GetFiles(buildDir, "*.pdb", SearchOption.AllDirectories))
+                {
+                    if (!pdbFile.EndsWith(suffixStr, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (IsFileLocked(pdbFile))
+                    {
+                        anyLocked = true;
+                        break;
+                    }
+                }
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return suffix;
+            }
+
+            if (!anyLocked)
+                return suffix;
+        }
+
+        return suffix;
     }
 
     /// <summary>

@@ -470,8 +470,48 @@ public static class PostBuildStep
             }
         }
 
+        // Clean versioned PDBs from the intermediate build directory.
+        // These accumulate across hot-reload sessions and can cause LNK1201
+        // (suffix collision with locked PDBs) on subsequent hot-reload builds.
+        removed += CleanVersionedPdbsFromBuildDir(context.CmakeBuildDir);
+
         if (removed > 0)
             Console.WriteLine($"[PostBuild] Cleaned {removed} hot-reload artifact(s)");
+    }
+
+    /// <summary>
+    /// Remove versioned PDB files (-NNNN.pdb) from the intermediate CMake build directory.
+    /// These accumulate across hot-reload sessions and can cause LNK1201 when the suffix
+    /// counter wraps around and collides with a PDB locked by the debugger.
+    /// </summary>
+    private static int CleanVersionedPdbsFromBuildDir(string buildDir)
+    {
+        if (!Directory.Exists(buildDir))
+            return 0;
+
+        int removed = 0;
+        foreach (var pdbFile in Directory.GetFiles(buildDir, "*.pdb", SearchOption.AllDirectories))
+        {
+            string normalized = pdbFile.Replace('\\', '/');
+            if (normalized.Contains("/CMakeFiles/", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string fileName = Path.GetFileName(pdbFile);
+            if (!BinaryNaming.HasHotReloadSuffix(fileName))
+                continue;
+
+            try
+            {
+                File.Delete(pdbFile);
+                removed++;
+            }
+            catch (IOException)
+            {
+                // File might be locked by debugger — skip.
+            }
+        }
+
+        return removed;
     }
 
     /// <summary>
