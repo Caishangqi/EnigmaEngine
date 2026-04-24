@@ -77,6 +77,10 @@ public static class PostBuildStep
             }
             else
             {
+                // Clean versioned hot-reload DLLs/PDBs from previous sessions
+                // and reset HotReload.state (matching UE's cleanup-on-normal-build).
+                CleanHotReloadArtifacts(context);
+
                 copied = CopyModularBinaries(context);
             }
 
@@ -209,11 +213,15 @@ public static class PostBuildStep
                 copied++;
 
                 // Copy PDB if exists.
-                string pdbName = Path.ChangeExtension(originalDllName, ".pdb");
-                string? builtPdb = FindFiles(context.CmakeBuildDir, pdbName).FirstOrDefault();
+                // CMake PDB_NAME may have produced a versioned PDB (e.g. {stem}-0002.pdb)
+                // to avoid linker collisions with locked PDBs. Try versioned name first,
+                // then fall back to the original unversioned name.
+                string versionedPdbName = $"{stem}-{suffix:D4}.pdb";
+                string originalPdbName = Path.ChangeExtension(originalDllName, ".pdb");
+                string? builtPdb = FindFiles(context.CmakeBuildDir, versionedPdbName).FirstOrDefault()
+                                ?? FindFiles(context.CmakeBuildDir, originalPdbName).FirstOrDefault();
                 if (builtPdb is not null)
                 {
-                    string versionedPdbName = $"{stem}-{suffix:D4}.pdb";
                     string versionedPdbPath = Path.Combine(outputDir, versionedPdbName);
                     File.Copy(builtPdb, versionedPdbPath, overwrite: true);
                     Console.WriteLine($"  [HotReload] {versionedPdbName}");
@@ -403,6 +411,67 @@ public static class PostBuildStep
 
         if (removed > 0)
             Console.WriteLine($"[PostBuild] Cleaned {removed} stale modular artifact(s)");
+    }
+
+    /// <summary>
+    /// Remove versioned hot-reload DLLs/PDBs (-NNNN.dll, -NNNN.pdb) from all output
+    /// directories and reset HotReload.state. Called during normal (non-hot-reload) builds
+    /// to start with a clean slate (matching UE's cleanup-on-normal-build pattern).
+    /// </summary>
+    private static void CleanHotReloadArtifacts(PostBuildContext context)
+    {
+        var scan = context.ScanResult;
+        var config = context.BuildOptions.Configuration;
+        var platform = context.BuildOptions.Platform;
+
+        var outputDirs = BuildOutputDirectoryMap(scan, context.ProjectName, config, platform)
+            .Values
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(Directory.Exists)
+            .ToList();
+
+        int removed = 0;
+        foreach (var dir in outputDirs)
+        {
+            foreach (var pattern in new[] { "*.dll", "*.pdb" })
+            {
+                foreach (var file in Directory.GetFiles(dir, pattern))
+                {
+                    string fileName = Path.GetFileName(file);
+                    if (!BinaryNaming.HasHotReloadSuffix(fileName))
+                        continue;
+
+                    try
+                    {
+                        File.Delete(file);
+                        Console.WriteLine($"  [Clean] {fileName}");
+                        removed++;
+                    }
+                    catch (IOException ex)
+                    {
+                        Console.Error.WriteLine(
+                            $"  [Warning] Could not remove {fileName}: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        // Reset HotReload.state so suffix restarts from 1.
+        string statePath = HotReloadState.GetStateFilePath(scan.ProjectRoot);
+        if (File.Exists(statePath))
+        {
+            try
+            {
+                File.Delete(statePath);
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup.
+            }
+        }
+
+        if (removed > 0)
+            Console.WriteLine($"[PostBuild] Cleaned {removed} hot-reload artifact(s)");
     }
 
     /// <summary>

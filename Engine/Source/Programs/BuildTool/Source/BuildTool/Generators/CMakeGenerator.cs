@@ -42,6 +42,8 @@ public sealed class CMakeGenerator
     /// <param name="configuration">Build configuration (Debug/DebugGame/Development/Shipping/Test).
     /// Controls optimization levels, debug symbols, and macro definitions.</param>
     /// <param name="platform">Target platform string for DLL naming (default "Win64").</param>
+    /// <param name="hotReloadModuleNames">Module names eligible for hot-reload PDB versioning.
+    /// When non-empty, a conditional block using HOT_RELOAD_SUFFIX is emitted for these modules.</param>
     /// <returns>A <see cref="GenerateResult"/> with the generated content or error.</returns>
     public GenerateResult Generate(
         string projectName,
@@ -50,7 +52,8 @@ public sealed class CMakeGenerator
         string projectRootPath,
         TargetRules? targetRules = null,
         BuildConfiguration configuration = BuildConfiguration.Development,
-        string platform = "Win64")
+        string platform = "Win64",
+        IReadOnlySet<string>? hotReloadModuleNames = null)
     {
         if (!resolveResult.Success)
         {
@@ -95,7 +98,8 @@ public sealed class CMakeGenerator
             }
 
             var isExecutable = executableModules.Contains(moduleName);
-            WriteModuleTarget(sb, rules, cmakeRootPath, isExecutable, projectName, configuration, platform);
+            bool isHotReloadable = hotReloadModuleNames is not null && hotReloadModuleNames.Contains(moduleName);
+            WriteModuleTarget(sb, rules, cmakeRootPath, isExecutable, projectName, configuration, platform, isHotReloadable);
 
             if (isExecutable)
                 executableModuleName = moduleName;
@@ -251,7 +255,7 @@ public sealed class CMakeGenerator
     /// </summary>
     private static void WriteModuleTarget(
         StringBuilder sb, ModuleRules rules, string cmakeRootPath, bool isExecutable,
-        string projectName, BuildConfiguration configuration, string platform)
+        string projectName, BuildConfiguration configuration, string platform, bool isHotReloadable)
     {
         if (rules.IsHeaderOnly)
         {
@@ -259,7 +263,7 @@ public sealed class CMakeGenerator
         }
         else
         {
-            WriteCompiledModuleTarget(sb, rules, cmakeRootPath, isExecutable, projectName, configuration, platform);
+            WriteCompiledModuleTarget(sb, rules, cmakeRootPath, isExecutable, projectName, configuration, platform, isHotReloadable);
         }
     }
 
@@ -323,7 +327,7 @@ public sealed class CMakeGenerator
     /// </summary>
     private static void WriteCompiledModuleTarget(
         StringBuilder sb, ModuleRules rules, string cmakeRootPath, bool isExecutable,
-        string projectName, BuildConfiguration configuration, string platform)
+        string projectName, BuildConfiguration configuration, string platform, bool isHotReloadable)
     {
         var name = rules.ModuleName;
         var upperName = name.ToUpperInvariant();
@@ -366,6 +370,17 @@ public sealed class CMakeGenerator
             var outputName = GetOutputName(projectName, name, configuration, platform);
             sb.AppendLine($"if(BUILD_SHARED_LIBS)");
             sb.AppendLine($"    set_target_properties({name} PROPERTIES OUTPUT_NAME \"{outputName}\")");
+            sb.AppendLine($"endif()");
+            sb.AppendLine();
+        }
+
+        // Hot-reload PDB versioning: redirect PDB output to a versioned path so the
+        // linker never collides with a PDB locked by the running process or debugger.
+        if (isHotReloadable && !isExecutable)
+        {
+            var outputName = GetOutputName(projectName, name, configuration, platform);
+            sb.AppendLine($"if(MSVC AND DEFINED HOT_RELOAD_SUFFIX)");
+            sb.AppendLine($"    set_target_properties({name} PROPERTIES PDB_NAME \"{outputName}-${{HOT_RELOAD_SUFFIX}}\")");
             sb.AppendLine($"endif()");
             sb.AppendLine();
         }

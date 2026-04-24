@@ -62,9 +62,36 @@ public sealed class BuildPipeline
         Directory.CreateDirectory(buildDir);
         Console.WriteLine($"[Step 1/6] Build directory: {buildDir}");
 
+        // Early hot-reload detection (before CMake generation so PDB_NAME can be set)
+        bool isHotReload = options.ExtraArguments.ContainsKey("hot-reload");
+        if (!isHotReload)
+        {
+            string engineOutputDir = Path.Combine(scan.EngineRoot, "Binaries", options.Platform);
+            string exeName = $"{BinaryNaming.GetExecutableOutputName(scan.ProjectName, options.Configuration, options.Platform)}.exe";
+            string exePath = Path.Combine(engineOutputDir, exeName);
+            if (File.Exists(exePath) && IsFileLocked(exePath))
+            {
+                Console.WriteLine("[Build] Engine exe is locked (running) -- auto-switching to hot-reload mode");
+                isHotReload = true;
+            }
+        }
+
+        // Collect hot-reloadable module names (always, for stable CMakeLists.txt generation)
+        var hotReloadModuleNames = CollectHotReloadModuleNames(scan);
+
+        // Load hot-reload state for PDB versioning
+        int hotReloadSuffix = 0;
+        if (isHotReload)
+        {
+            string statePath = HotReloadState.GetStateFilePath(scan.ProjectRoot);
+            var state = HotReloadState.Load(statePath);
+            hotReloadSuffix = state.NextSuffix;
+            Console.WriteLine($"[Build] Hot-reload suffix: {hotReloadSuffix:D4}, modules: {string.Join(", ", hotReloadModuleNames)}");
+        }
+
         // [2] Generate CMakeLists.txt
         Console.WriteLine("[Step 2/6] Generating CMakeLists.txt ...");
-        var genResult = GenerateCMake(scan, config, platform);
+        var genResult = GenerateCMake(scan, config, platform, hotReloadModuleNames);
         if (!genResult.Success)
             return Fail("CMake generation failed", genResult.Error, sw);
 
@@ -77,11 +104,16 @@ public sealed class BuildPipeline
         // [3] Check CMakeCache.txt - skip reconfigure if cache exists and CMakeLists.txt is older
         bool needsConfigure = NeedsConfigure(buildDir, cmakeListsPath);
 
-        // [4] CMake configure (with BUILD_SHARED_LIBS)
+        // Hot-reload always reconfigures (HOT_RELOAD_SUFFIX changes each build)
+        if (isHotReload)
+            needsConfigure = true;
+
+        // [4] CMake configure (with BUILD_SHARED_LIBS and optional HOT_RELOAD_SUFFIX)
         if (needsConfigure)
         {
             Console.WriteLine("[Step 3/6] Configuring CMake ...");
-            var configureResult = ConfigureCMake(scan.ProjectRoot, buildDir, isShipping);
+            var configureResult = ConfigureCMake(scan.ProjectRoot, buildDir, isShipping,
+                isHotReload ? hotReloadSuffix : null);
             if (!configureResult.Success)
                 return Fail("CMake configure failed", configureResult.Output, sw);
 
@@ -102,23 +134,6 @@ public sealed class BuildPipeline
         Console.WriteLine("  Build: OK");
 
         // [6] Post-build step
-        bool isHotReload = options.ExtraArguments.ContainsKey("hot-reload");
-
-        // Auto-detect hot-reload: if the engine exe is locked (running),
-        // automatically switch to hot-reload mode (matching UE's behavior
-        // where building from the editor auto-enables hot-reload).
-        if (!isHotReload)
-        {
-            string engineOutputDir = Path.Combine(scan.EngineRoot, "Binaries", options.Platform);
-            string exeName = $"{BinaryNaming.GetExecutableOutputName(scan.ProjectName, options.Configuration, options.Platform)}.exe";
-            string exePath = Path.Combine(engineOutputDir, exeName);
-            if (File.Exists(exePath) && IsFileLocked(exePath))
-            {
-                Console.WriteLine("[PostBuild] Engine exe is locked (running) -- auto-switching to hot-reload mode");
-                isHotReload = true;
-            }
-        }
-
         Console.WriteLine(isHotReload
             ? "[Step 5/6] Running hot-reload post-build step ..."
             : "[Step 5/6] Running post-build step ...");
@@ -156,7 +171,8 @@ public sealed class BuildPipeline
     /// (game modules + plugin modules + target entry points).
     /// </summary>
     private static CMakeGenerator.GenerateResult GenerateCMake(
-        ProjectScanner.ScanResult scan, BuildConfiguration config, string platform)
+        ProjectScanner.ScanResult scan, BuildConfiguration config, string platform,
+        IReadOnlySet<string>? hotReloadModuleNames = null)
     {
         var targetRules = scan.EngineTarget ?? scan.GameTarget;
 
@@ -215,7 +231,8 @@ public sealed class BuildPipeline
             scan.ProjectRoot,
             targetRules,
             config,
-            platform);
+            platform,
+            hotReloadModuleNames);
     }
 
     /// <summary>
@@ -236,14 +253,20 @@ public sealed class BuildPipeline
 
     /// <summary>
     /// Run CMake configure with BUILD_SHARED_LIBS and Visual Studio generator.
+    /// When hotReloadSuffix is provided, passes HOT_RELOAD_SUFFIX to version PDB output.
     /// </summary>
     private CMakeInvoker.ProcessResult ConfigureCMake(
-        string projectRoot, string buildDir, bool isShipping)
+        string projectRoot, string buildDir, bool isShipping, int? hotReloadSuffix = null)
     {
         var defines = new Dictionary<string, string>
         {
             ["BUILD_SHARED_LIBS:BOOL"] = isShipping ? "OFF" : "ON",
         };
+
+        if (hotReloadSuffix.HasValue)
+        {
+            defines["HOT_RELOAD_SUFFIX:STRING"] = $"{hotReloadSuffix.Value:D4}";
+        }
 
         return _cmake.Configure(
             projectRoot,
@@ -342,5 +365,31 @@ public sealed class BuildPipeline
         {
             return true;
         }
+    }
+
+    /// <summary>
+    /// Collect module names eligible for hot-reload (game modules + project plugin modules).
+    /// Engine modules and engine plugins are excluded.
+    /// </summary>
+    private static HashSet<string> CollectHotReloadModuleNames(ProjectScanner.ScanResult scan)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var name in scan.GameModules.Keys)
+            names.Add(name);
+
+        foreach (var (_, descriptor) in scan.PluginScanResult.EnabledPlugins)
+        {
+            string pluginDir = Path.GetDirectoryName(descriptor.SourceFilePath)!;
+            string normalizedPluginDir = pluginDir.Replace('\\', '/');
+            string normalizedEngineRoot = scan.EngineRoot.Replace('\\', '/');
+            if (normalizedPluginDir.StartsWith(normalizedEngineRoot, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            foreach (var moduleDesc in descriptor.Modules)
+                names.Add(moduleDesc.Name);
+        }
+
+        return names;
     }
 }
