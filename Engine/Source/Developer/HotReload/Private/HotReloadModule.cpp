@@ -86,6 +86,7 @@ private:
     bool Tick(float DeltaTime);
     void OnBinariesChanged(const std::vector<FFileChangeData>& Changes);
     void RefreshWatchedDirectories();
+    void CleanStaleHotReloadFiles();
     bool DoReloadModule(const std::string& InModuleName,
                         const std::string& VersionedDllPath);
 
@@ -129,6 +130,10 @@ void FHotReloadModule::StartupModule()
     // LoadModuleChecked ensures DirectoryWatcher is loaded and initialized
     // before we try to register callbacks with it.
     FModuleManager::Get().LoadModule("DirectoryWatcher");
+
+    // Clean versioned DLLs/PDBs left over from previous hot-reload sessions.
+    // At startup no old DLLs are loaded, so they can be safely deleted.
+    CleanStaleHotReloadFiles();
 
     RefreshWatchedDirectories();
 
@@ -211,6 +216,55 @@ void FHotReloadModule::RefreshWatchedDirectories()
             WatchHandles.emplace_back(SearchPath, Handle);
             ENIGMA_LOG(LogHotReload, Info, "Watching: {}", SearchPath);
         }
+    }
+}
+
+// ---------------------------------------------------------------
+// CleanStaleHotReloadFiles -- remove old versioned DLLs/PDBs
+// ---------------------------------------------------------------
+
+void FHotReloadModule::CleanStaleHotReloadFiles()
+{
+    namespace fs = std::filesystem;
+
+    auto& ModMgr = FModuleManager::Get();
+    const auto& SearchPaths = ModMgr.GetDllSearchPaths();
+
+    int Removed = 0;
+    for (const auto& Dir : SearchPaths)
+    {
+        if (!fs::exists(Dir) || !fs::is_directory(Dir))
+            continue;
+
+        std::error_code EC;
+        for (const auto& Entry : fs::directory_iterator(Dir, EC))
+        {
+            if (!Entry.is_regular_file()) continue;
+
+            auto Ext = Entry.path().extension().string();
+            if (Ext != ".dll" && Ext != ".pdb") continue;
+
+            std::string Stem = Entry.path().stem().string();
+            if (!HasHotReloadSuffix(Stem)) continue;
+
+            std::error_code RemoveEC;
+            if (fs::remove(Entry.path(), RemoveEC))
+            {
+                ++Removed;
+            }
+            else if (RemoveEC)
+            {
+                ENIGMA_LOG(LogHotReload, Warning,
+                    "Could not remove stale {}: {}",
+                    Entry.path().filename().string(), RemoveEC.message());
+            }
+        }
+    }
+
+    if (Removed > 0)
+    {
+        ENIGMA_LOG(LogHotReload, Info,
+            "Cleaned {} stale hot-reload artifact(s)", Removed);
     }
 }
 
