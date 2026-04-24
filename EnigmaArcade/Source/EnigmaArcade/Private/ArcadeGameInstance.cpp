@@ -46,7 +46,7 @@ void FArcadeGameInstance::Init()
 	m_playerObj->GetTransform().SetPosition(Enigma::FVector(5.0f, 5.0f, 0.0f));
 
 	m_playerSprite = m_playerObj->AddComponent<Enigma::FAsciiSpriteComponent>();
-	m_playerSprite->DisplayChar = 'a';
+	m_playerSprite->DisplayChar = '@';
 	m_playerSprite->Width  = 2;
 	m_playerSprite->Height = 2;
 	m_playerSprite->Fg = Enigma::FColor::Green;
