@@ -11,5 +11,6 @@ public class ApplicationCore : ModuleRules
         PrivateIncludePaths.Add("Private");
 
         PublicDependencyModuleNames.Add("Core");
+        PrivateTestDependencyModuleNames.Add("AutomationTest");
     }
 }

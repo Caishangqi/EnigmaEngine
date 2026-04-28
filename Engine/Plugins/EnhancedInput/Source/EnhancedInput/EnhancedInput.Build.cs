@@ -13,5 +13,6 @@ public class EnhancedInput : ModuleRules
         PublicDependencyModuleNames.Add("Core");
         PublicDependencyModuleNames.Add("Engine");
         PublicDependencyModuleNames.Add("ApplicationCore");
+        PrivateTestDependencyModuleNames.Add("AutomationTest");
     }
 }

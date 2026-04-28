@@ -12,6 +12,14 @@ namespace Enigma
 
 FGenericApplication* FGenericApplication::s_application = nullptr;
 
+FGenericApplication::~FGenericApplication()
+{
+    if (s_application == this)
+    {
+        s_application = nullptr;
+    }
+}
+
 void FGenericApplication::SetMessageHandler(FGenericApplicationMessageHandler* handler)
 {
     MessageHandler = handler;

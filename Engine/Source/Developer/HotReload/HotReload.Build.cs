@@ -18,5 +18,6 @@ public class HotReload : ModuleRules
         // [TEST] Engine dependency for GameInstance recreation after hot-reload.
         // Remove when Editor exists and handles object reconstruction.
         PrivateDependencyModuleNames.Add("Engine");
+        PrivateTestDependencyModuleNames.Add("AutomationTest");
     }
 }

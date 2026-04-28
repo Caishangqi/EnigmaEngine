@@ -101,7 +101,7 @@ EnigmaArcade/Source/EnigmaArcade/Private/Tests/MyGameAutomationTests.cpp
 PrivateTestDependencyModuleNames.Add("AutomationTest");
 ```
 
-根目录 `Tests/` 仍是 legacy standalone GoogleTest baseline。新覆盖率优先写入模块本地 `Private/Tests/`。
+根目录 `Tests/` 仅保留独立构建和模块验证项目。模块和功能覆盖率优先写入模块本地 `Private/Tests/`。
 
 ### 项目脚手架
 
@@ -152,7 +152,7 @@ EXE 通过 `--project-dir=` 命令行参数在运行时定位游戏 DLL（VS 调
 
 ## 持续集成
 
-CI 会构建 BuildTool，运行 BuildTool 验证套件，使用 `ci-standard` profile 运行引擎 AutomationTest，保持 legacy standalone GoogleTest 项目通过，并验证示例项目构建和打包流程。
+CI 会构建 BuildTool，运行 BuildTool 验证套件，使用 `ci-standard` profile 运行引擎 AutomationTest，保持独立模块验证项目通过，并验证示例项目构建和打包流程。
 
 ## 模块
 
@@ -174,7 +174,7 @@ CI 会构建 BuildTool，运行 BuildTool 验证套件，使用 `ci-standard` pr
 | **名称** | **说明** | **链接** |
 |----------|:--------:|:--------:|
 | `nlohmann::json` | JSON for Modern C++ | [Github](https://github.com/nlohmann/json) |
-| `Google Test` | AutomationTest 后端与 legacy standalone 测试框架 (git submodule) | [Github](https://github.com/google/googletest) |
+| `Google Test` | AutomationTest 执行后端 (git submodule) | [Github](https://github.com/google/googletest) |
 
 ## 项目结构
 
@@ -221,25 +221,18 @@ EnigmaEngine/
   .clang-format                  C++ 格式规则
   .editorconfig                  编辑器与 C# 分析规则
   Tests/
-    Core.Math.Tests/             legacy standalone GoogleTest baseline
-    Core.Delegates.Tests/        委托系统单元测试 (GoogleTest, 37 个测试)
-    Core.Config.Tests/           配置系统单元测试 (GoogleTest)
-    Core.ThreadPool.Tests/       线程池单元测试 (GoogleTest)
-    Core.TaskGraph.Tests/        任务图单元测试 (GoogleTest)
-    ApplicationCore.Tests/       窗口与消息泵测试 (GoogleTest, 20 个测试)
-    RenderCore.Tests/            RenderCore 模块测试 (GoogleTest)
-    AsciiRenderer.Tests/         AsciiRenderer 模块测试 (GoogleTest)
-    Engine.Tests/                Engine 模块测试 (GoogleTest)
-    Engine.TickSystem.Tests/     Tick 系统单元测试 (GoogleTest)
-    EnhancedInput.Tests/         增强输入系统测试 (GoogleTest)
-    Core.Ticker.Tests/           FTSTicker 单元测试 (GoogleTest, 11 个测试)
-    DirectoryWatcher.Tests/      DirectoryWatcher 模块测试 (GoogleTest, 7 个测试)
-    HotReload.Tests/             HotReload 模块测试 (GoogleTest, 7 个测试)
+    CoreModuleTest/              Core 模块独立验证
     DllExportMacroTest/          DLL 导出宏验证
+    EngineLoopTest/              Engine loop 独立验证
+    EngineModuleTest/            Engine 模块独立验证
+    GameEngineConnectionTest/    Game engine 连接验证
+    GameEngineTest/              Game engine 独立验证
+    GameInstanceTest/            Game instance 独立验证
     ModuleInterfaceTest/         模块接口集成测试
     ModuleManagerTest/           模块管理器集成测试
     LaunchModuleTest/            Launch 模块集成测试
     NlohmannJsonTest/            nlohmann_json 集成测试
+    NlohmannJsonIntegrationTest/ nlohmann_json BuildTool 项目集成测试
 ```
 
 <p>&nbsp;

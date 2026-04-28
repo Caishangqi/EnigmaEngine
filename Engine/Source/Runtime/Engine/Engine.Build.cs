@@ -15,5 +15,6 @@ public class Engine : ModuleRules
         PublicDependencyModuleNames.Add("RenderCore");
 
         PrivateDependencyModuleNames.Add("nlohmann_json");
+        PrivateTestDependencyModuleNames.Add("AutomationTest");
     }
 }

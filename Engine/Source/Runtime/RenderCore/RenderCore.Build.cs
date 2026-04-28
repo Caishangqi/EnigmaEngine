@@ -12,5 +12,6 @@ public class RenderCore : ModuleRules
 		PrivateIncludePaths.Add("Private");
 
 		PublicDependencyModuleNames.Add("Core");
+		PrivateTestDependencyModuleNames.Add("AutomationTest");
 	}
 }

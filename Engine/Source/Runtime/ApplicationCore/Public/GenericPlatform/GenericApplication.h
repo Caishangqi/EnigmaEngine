@@ -31,7 +31,7 @@ class FGenericApplicationMessageHandler;
 class APPLICATIONCORE_API FGenericApplication
 {
 public:
-    virtual ~FGenericApplication() = default;
+    virtual ~FGenericApplication();
 
     /// Process pending OS messages for this frame.
     virtual void PumpMessages(float deltaTime) {}

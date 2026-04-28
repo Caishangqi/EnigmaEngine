@@ -15,5 +15,6 @@ public class AsciiRenderer : ModuleRules
 		PublicDependencyModuleNames.Add("RenderCore");
 		PublicDependencyModuleNames.Add("ApplicationCore");
 		PublicDependencyModuleNames.Add("Engine");
+		PrivateTestDependencyModuleNames.Add("AutomationTest");
 	}
 }

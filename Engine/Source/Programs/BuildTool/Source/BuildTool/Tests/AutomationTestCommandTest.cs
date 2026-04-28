@@ -60,7 +60,7 @@ public static class AutomationTestCommandTest
         {
             ["run"] = "",
             ["profile"] = "ci-standard",
-            ["name"] = "System.Core.Name.Basic",
+            ["name"] = "System.Core.Name.DefaultConstructionIsNone",
             ["name-prefix"] = "System.Core",
             ["report"] = "Saved/AutomationReports",
         }, "F:/Project/TestGame.eproject");
@@ -68,7 +68,7 @@ public static class AutomationTestCommandTest
         Assert(!options.EngineMode, "Project mode should be the default");
         Assert(options.Run, "Run action should be enabled");
         Assert(options.Profile == AutomationTestProfile.CiStandard, "Profile should be ci-standard");
-        Assert(options.Name == "System.Core.Name.Basic", "Exact name should parse");
+        Assert(options.Name == "System.Core.Name.DefaultConstructionIsNone", "Exact name should parse");
         Assert(options.NamePrefix == "System.Core", "Name prefix should parse");
         Assert(options.ReportDirectory == "Saved/AutomationReports", "Report path should parse");
 

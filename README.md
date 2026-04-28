@@ -101,7 +101,7 @@ Modules with `Private/Tests` sources should declare test-only dependencies in th
 PrivateTestDependencyModuleNames.Add("AutomationTest");
 ```
 
-The root `Tests/` directory remains the legacy standalone GoogleTest baseline. Prefer module-local `Private/Tests/` for new coverage.
+The root `Tests/` directory is reserved for standalone build and module validation projects. Prefer module-local `Private/Tests/` for module and feature coverage.
 
 ### Project Scaffolding
 
@@ -152,7 +152,7 @@ The EXE locates game DLLs at runtime via `--project-dir=` command line argument 
 
 ## Continuous Integration
 
-CI builds BuildTool, runs BuildTool validation suites, runs engine AutomationTest with the `ci-standard` profile, keeps the legacy standalone GoogleTest projects green, and verifies the example project build/package flow.
+CI builds BuildTool, runs BuildTool validation suites, runs engine AutomationTest with the `ci-standard` profile, keeps standalone module validation projects green, and verifies the example project build/package flow.
 
 ## Modules
 
@@ -174,7 +174,7 @@ CI builds BuildTool, runs BuildTool validation suites, runs engine AutomationTes
 | **Name** | **Description** | **Link** |
 |----------|:---------------:|:--------:|
 | `nlohmann::json` | JSON for Modern C++ | [Github](https://github.com/nlohmann/json) |
-| `Google Test` | AutomationTest backend and legacy standalone test framework (git submodule) | [Github](https://github.com/google/googletest) |
+| `Google Test` | AutomationTest execution backend (git submodule) | [Github](https://github.com/google/googletest) |
 
 ## Project Structure
 
@@ -221,25 +221,18 @@ EnigmaEngine/
   .clang-format                  C++ formatting rules
   .editorconfig                  Editor and C# analysis rules
   Tests/
-    Core.Math.Tests/             Legacy standalone GoogleTest baseline
-    Core.Delegates.Tests/        Delegate system unit tests (GoogleTest, 37 tests)
-    Core.Config.Tests/           Config system unit tests (GoogleTest)
-    Core.ThreadPool.Tests/       Thread pool unit tests (GoogleTest)
-    Core.TaskGraph.Tests/        Task graph unit tests (GoogleTest)
-    ApplicationCore.Tests/       Window & message pump tests (GoogleTest, 20 tests)
-    RenderCore.Tests/            RenderCore module tests (GoogleTest)
-    AsciiRenderer.Tests/         AsciiRenderer module tests (GoogleTest)
-    Engine.Tests/                Engine module tests (GoogleTest)
-    Engine.TickSystem.Tests/     Tick system unit tests (GoogleTest)
-    EnhancedInput.Tests/         Enhanced Input system tests (GoogleTest)
-    Core.Ticker.Tests/           FTSTicker unit tests (GoogleTest, 11 tests)
-    DirectoryWatcher.Tests/      DirectoryWatcher module tests (GoogleTest, 7 tests)
-    HotReload.Tests/             HotReload module tests (GoogleTest, 7 tests)
+    CoreModuleTest/              Core module standalone validation
     DllExportMacroTest/          DLL export macro validation
+    EngineLoopTest/              Engine loop standalone validation
+    EngineModuleTest/            Engine module standalone validation
+    GameEngineConnectionTest/    Game engine connection validation
+    GameEngineTest/              Game engine standalone validation
+    GameInstanceTest/            Game instance standalone validation
     ModuleInterfaceTest/         Module interface integration test
     ModuleManagerTest/           Module manager integration test
     LaunchModuleTest/            Launch module integration test
     NlohmannJsonTest/            nlohmann_json integration test
+    NlohmannJsonIntegrationTest/ nlohmann_json BuildTool project integration
 ```
 
 <p>&nbsp;
