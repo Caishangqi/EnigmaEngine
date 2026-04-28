@@ -13,5 +13,6 @@ public class DirectoryWatcher : ModuleRules
         PrivateIncludePaths.Add("Private");
 
         PublicDependencyModuleNames.Add("Core");
+        PrivateTestDependencyModuleNames.Add("AutomationTest");
     }
 }

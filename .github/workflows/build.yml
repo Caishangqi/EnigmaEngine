@@ -47,6 +47,9 @@ jobs:
             "vcxproj-generator"
             "solution-generator"
             "project-scanner"
+            "automation-test-command"
+            "automation-test-scanner"
+            "automation-test-generator"
             "name-validator"
             "template-engine"
             "eproject-modifier"
@@ -84,7 +87,37 @@ jobs:
   # --- PLACEHOLDER_STAGE2 ---
 
   # ---------------------------------------------------------------------------
-  # Stage 2: C++ Unit Tests
+  # Stage 2: Enigma Automation Tests
+  # ---------------------------------------------------------------------------
+  automation-tests:
+    name: Automation Tests
+    needs: [buildtool]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup .NET 9.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Download BuildTool
+        uses: actions/download-artifact@v4
+        with:
+          name: buildtool
+          path: Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/
+
+      - name: Run engine automation tests
+        shell: pwsh
+        run: |
+          $bt = "Engine/Source/Programs/BuildTool/Source/BuildTool/bin/Release/net9.0/BuildTool.exe"
+          & $bt automation-test "." --engine --run --profile ci-standard --report "Engine/Intermediate/AutomationTest/Reports"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: C++ Unit Tests
   # ---------------------------------------------------------------------------
   cpp-unit-tests:
     name: C++ Unit Tests
@@ -185,7 +218,7 @@ jobs:
   # --- PLACEHOLDER_STAGE3 ---
 
   # ---------------------------------------------------------------------------
-  # Stage 3: Engine Module Build Validation (standalone infrastructure tests)
+  # Stage 4: Engine Module Build Validation (standalone infrastructure tests)
   # ---------------------------------------------------------------------------
   engine-module-validation:
     name: Engine Module Validation
@@ -236,11 +269,11 @@ jobs:
         run: ctest --test-dir build-nlohmann-json --output-on-failure -C Release
 
   # ---------------------------------------------------------------------------
-  # Stage 4: Example Project Build — build all configs, package, upload
+  # Stage 5: Example Project Build — build all configs, package, upload
   # ---------------------------------------------------------------------------
   example-project-build:
     name: Example Project Build
-    needs: [buildtool, cpp-unit-tests, engine-module-validation]
+    needs: [buildtool, automation-tests, cpp-unit-tests, engine-module-validation]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

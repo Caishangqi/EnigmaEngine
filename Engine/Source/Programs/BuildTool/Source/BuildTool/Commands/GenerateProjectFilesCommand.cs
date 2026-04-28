@@ -194,7 +194,24 @@ public sealed class GenerateProjectFilesCommand : ICommand
 
             Console.WriteLine($"  Solution: {slnResult.OutputPath}");
 
-            // 12. Generate GenerateProjectFiles.bat at project root
+            // 12. Generate shared Rider run configurations
+            var riderRunConfigResult = new RiderRunConfigurationGenerator()
+                .GenerateAutomationTestConfigs(new RiderRunConfigurationGenerator.GenerateInput
+                {
+                    OutputDirectory = projectRoot,
+                    BuildToolProjectPath = ToProjectDirPath(projectRoot, buildToolCsproj),
+                    WorkingDirectory = "$PROJECT_DIR$",
+                    RootArgument = ToProjectDirPath(projectRoot, eprojectPath),
+                    EngineMode = false,
+                    ReportDirectory = "Saved/AutomationReports",
+                });
+
+            if (!riderRunConfigResult.Success)
+                return BuildResult.Fail("Rider run configuration generation failed.", riderRunConfigResult.Error);
+
+            Console.WriteLine($"  RiderRunConfigs: {riderRunConfigResult.GeneratedCount}");
+
+            // 13. Generate GenerateProjectFiles.bat at project root
             GenerateBatchScript(projectRoot, buildToolCsproj, eprojectPath);
 
             Console.WriteLine();
@@ -209,7 +226,7 @@ public sealed class GenerateProjectFilesCommand : ICommand
     }
 
     /// <summary>Compute include paths for a module: own Public/ + dependencies' Public/ + Generated/.</summary>
-    private static List<string> ComputeIncludePaths(string moduleName, ModuleRules rules,
+    internal static List<string> ComputeIncludePaths(string moduleName, ModuleRules rules,
         IReadOnlyDictionary<string, ModuleRules> allModules, DependencyResolver.ResolveResult resolveResult,
         string projectRoot)
     {
@@ -227,8 +244,8 @@ public sealed class GenerateProjectFilesCommand : ICommand
         if (Directory.Exists(privateDir)) paths.Add(privateDir);
 
         // Explicit include paths from .Build.cs
-        paths.AddRange(rules.PublicIncludePaths);
-        paths.AddRange(rules.PrivateIncludePaths);
+        AddModuleDeclaredIncludePaths(paths, rules.ModuleDirectory, rules.PublicIncludePaths);
+        AddModuleDeclaredIncludePaths(paths, rules.ModuleDirectory, rules.PrivateIncludePaths);
 
         // Dependencies' public include paths
         if (resolveResult.AdjacencyList.TryGetValue(moduleName, out var deps))
@@ -237,29 +254,68 @@ public sealed class GenerateProjectFilesCommand : ICommand
             {
                 if (allModules.TryGetValue(dep, out var depRules))
                 {
-                    string depPublic = Path.Combine(depRules.ModuleDirectory, "Public");
-                    if (Directory.Exists(depPublic)) paths.Add(depPublic);
-
-                    // For header-only modules, also add include/ directory
-                    string depInclude = Path.Combine(depRules.ModuleDirectory, "include");
-                    if (Directory.Exists(depInclude)) paths.Add(depInclude);
-
-                    paths.AddRange(depRules.PublicIncludePaths);
+                    AddDependencyPublicIncludePaths(paths, depRules);
                 }
+            }
+        }
+
+        // Test-only dependencies are included for IDE analysis of Private/Tests sources only.
+        foreach (var testDep in rules.PublicTestDependencyModuleNames.Concat(rules.PrivateTestDependencyModuleNames))
+        {
+            if (allModules.TryGetValue(testDep, out var depRules))
+            {
+                AddDependencyPublicIncludePaths(paths, depRules);
             }
         }
 
         return paths;
     }
 
+    private static void AddDependencyPublicIncludePaths(List<string> paths, ModuleRules depRules)
+    {
+        string depPublic = Path.Combine(depRules.ModuleDirectory, "Public");
+        if (Directory.Exists(depPublic))
+            AddUniquePath(paths, depPublic);
+
+        // For header-only modules, also add include/ directory.
+        string depInclude = Path.Combine(depRules.ModuleDirectory, "include");
+        if (Directory.Exists(depInclude))
+            AddUniquePath(paths, depInclude);
+
+        AddModuleDeclaredIncludePaths(paths, depRules.ModuleDirectory, depRules.PublicIncludePaths);
+    }
+
+    private static void AddModuleDeclaredIncludePaths(
+        List<string> paths,
+        string moduleDirectory,
+        IEnumerable<string> declaredPaths)
+    {
+        foreach (var declaredPath in declaredPaths)
+        {
+            string path = Path.IsPathRooted(declaredPath)
+                ? declaredPath
+                : Path.Combine(moduleDirectory, declaredPath);
+            AddUniquePath(paths, path);
+        }
+    }
+
+    private static void AddUniquePath(List<string> paths, string path)
+    {
+        string normalized = Path.GetFullPath(path);
+        if (!paths.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+        {
+            paths.Add(normalized);
+        }
+    }
+
     /// <summary>Compute preprocessor definitions for a module.</summary>
-    private static List<string> ComputePreprocessorDefs(string moduleName)
+    internal static List<string> ComputePreprocessorDefs(string moduleName)
     {
         return [$"{moduleName.ToUpperInvariant()}_EXPORTS"];
     }
 
     /// <summary>Collect all source files (.cpp, .h, .hpp, .c) from a module directory.</summary>
-    private static List<string> CollectSourceFiles(string moduleDir)
+    internal static List<string> CollectSourceFiles(string moduleDir)
     {
         var files = new List<string>();
         string[] extensions = ["*.cpp", "*.h", "*.hpp", "*.c"];
@@ -274,7 +330,7 @@ public sealed class GenerateProjectFilesCommand : ICommand
     }
 
     /// <summary>Collect all header files (.h, .hpp) from a module directory.</summary>
-    private static List<string> CollectHeaderFiles(string moduleDir)
+    internal static List<string> CollectHeaderFiles(string moduleDir)
     {
         var files = new List<string>();
         string[] extensions = ["*.h", "*.hpp"];
@@ -370,5 +426,11 @@ public sealed class GenerateProjectFilesCommand : ICommand
         // Write without BOM -- Windows cmd.exe does not handle UTF-8 BOM in .bat files.
         File.WriteAllText(batPath, content, new System.Text.UTF8Encoding(false));
         Console.WriteLine($"  Script:   {batPath}");
+    }
+
+    internal static string ToProjectDirPath(string projectRoot, string path)
+    {
+        string relative = Path.GetRelativePath(projectRoot, Path.GetFullPath(path)).Replace('\\', '/');
+        return $"$PROJECT_DIR$/{relative}";
     }
 }

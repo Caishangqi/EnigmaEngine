@@ -59,8 +59,8 @@ public static class TargetParserTest
     {
         Console.WriteLine("[Test 3] Unreal reference .Target.cs (multi-module)");
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..",
-            "Reference", "@example_unreal_project", "Source", "Kila_Hourbound.Target.cs"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "..", "..", "..",
+            ".reference", "@example_unreal_project", "Source", "Kila_Hourbound.Target.cs"));
 
         if (!File.Exists(path))
         {

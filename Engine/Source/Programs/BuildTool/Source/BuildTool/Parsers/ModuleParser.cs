@@ -38,6 +38,8 @@ public static partial class ModuleParser
         "PrivateIncludePaths",
         "PublicDependencyModuleNames",
         "PrivateDependencyModuleNames",
+        "PublicTestDependencyModuleNames",
+        "PrivateTestDependencyModuleNames",
         "DynamicallyLoadedModuleNames",
     };
 
@@ -92,6 +94,12 @@ public static partial class ModuleParser
 
         if (listValues.TryGetValue("PrivateDependencyModuleNames", out var privDep))
             rules.PrivateDependencyModuleNames.AddRange(privDep);
+
+        if (listValues.TryGetValue("PublicTestDependencyModuleNames", out var pubTestDep))
+            rules.PublicTestDependencyModuleNames.AddRange(pubTestDep);
+
+        if (listValues.TryGetValue("PrivateTestDependencyModuleNames", out var privTestDep))
+            rules.PrivateTestDependencyModuleNames.AddRange(privTestDep);
 
         if (listValues.TryGetValue("DynamicallyLoadedModuleNames", out var dynLoad))
             rules.DynamicallyLoadedModuleNames.AddRange(dynLoad);

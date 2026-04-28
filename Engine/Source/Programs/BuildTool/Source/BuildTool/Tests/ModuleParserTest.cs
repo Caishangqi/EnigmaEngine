@@ -1,3 +1,4 @@
+using BuildTool.Analysis;
 using BuildTool.Models;
 using BuildTool.Parsers;
 
@@ -20,6 +21,7 @@ public static class ModuleParserTest
         TestUnrealReference();
         TestFileNotFound();
         TestModuleTypeProperty();
+        TestTestOnlyDependencies();
 
         Console.WriteLine();
         Console.WriteLine("=== All tests passed ===");
@@ -74,8 +76,8 @@ public static class ModuleParserTest
     {
         Console.WriteLine("[Test 3] Unreal reference .Build.cs (multi-AddRange)");
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..",
-            "Reference", "@example_unreal_project", "Source", "Kila_Hourbound", "Kila_Hourbound.Build.cs"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "..", "..", "..",
+            ".reference", "@example_unreal_project", "Source", "Kila_Hourbound", "Kila_Hourbound.Build.cs"));
 
         if (!File.Exists(path))
         {
@@ -152,6 +154,64 @@ public static class ModuleParserTest
         }
 
         Console.WriteLine("  PASSED");
+    }
+
+    private static void TestTestOnlyDependencies()
+    {
+        Console.WriteLine("[Test 6] Test-only dependencies parse without entering production graph");
+
+        var path = Path.Combine(Path.GetTempPath(), $"TestedModule_{Guid.NewGuid():N}.Build.cs");
+        try
+        {
+            File.WriteAllText(path, """
+                using EnigmaEngine;
+
+                public class TestedModule : ModuleRules
+                {
+                    public TestedModule(ReadOnlyTargetRules Target) : base(Target)
+                    {
+                        PublicDependencyModuleNames.Add("Core");
+                        PublicTestDependencyModuleNames.Add("AutomationTest");
+                        PrivateTestDependencyModuleNames.AddRange(new string[] { "googletest", "TestHelper" });
+                    }
+                }
+                """);
+
+            var rules = ModuleParser.Parse(path);
+            Assert(rules.ModuleName == "TestedModule",
+                $"ModuleName: expected 'TestedModule', got '{rules.ModuleName}'");
+            Assert(rules.PublicDependencyModuleNames.SequenceEqual(["Core"]),
+                "PublicDependencyModuleNames should contain only Core");
+            Assert(rules.PublicTestDependencyModuleNames.SequenceEqual(["AutomationTest"]),
+                "PublicTestDependencyModuleNames should contain AutomationTest");
+            Assert(rules.PrivateTestDependencyModuleNames.SequenceEqual(["googletest", "TestHelper"]),
+                "PrivateTestDependencyModuleNames should contain googletest and TestHelper");
+
+            var modules = new Dictionary<string, ModuleRules>(StringComparer.Ordinal)
+            {
+                ["TestedModule"] = rules,
+                ["Core"] = new() { ModuleName = "Core" },
+                ["AutomationTest"] = new() { ModuleName = "AutomationTest" },
+                ["googletest"] = new() { ModuleName = "googletest" },
+                ["TestHelper"] = new() { ModuleName = "TestHelper" },
+            };
+
+            var resolveResult = new DependencyResolver().Resolve(modules);
+            Assert(resolveResult.Success, "Dependency resolution should succeed");
+
+            var productionDeps = resolveResult.AdjacencyList["TestedModule"];
+            Assert(productionDeps.SequenceEqual(["Core"]),
+                $"Production graph should contain only Core, got '{string.Join(", ", productionDeps)}'");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
     }
 
     private static string? ResolveThirdPartyRoot()

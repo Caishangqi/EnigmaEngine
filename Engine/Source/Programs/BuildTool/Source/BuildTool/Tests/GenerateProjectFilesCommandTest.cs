@@ -1,6 +1,7 @@
 // Copyright EnigmaEngine. All Rights Reserved.
 
 using System.Xml.Linq;
+using BuildTool.Analysis;
 using BuildTool.Commands;
 using BuildTool.Models;
 using BuildTool.Utils;
@@ -28,6 +29,7 @@ public static class GenerateProjectFilesCommandTest
         TestThirdPartyVcxprojContainsBuildCs();
         TestBuildCsInModuleVcxproj();
         TestTargetCsInModuleVcxproj();
+        TestTestOnlyDependenciesInIdeIncludePaths();
 
         Console.WriteLine();
         Console.WriteLine("=== All tests passed ===");
@@ -347,6 +349,81 @@ public static class GenerateProjectFilesCommandTest
         Assert(!slnContent.Contains("\"Rules Files\""), "Rules Files should not exist in .sln");
 
         Console.WriteLine("  PASSED");
+    }
+
+    private static void TestTestOnlyDependenciesInIdeIncludePaths()
+    {
+        Console.WriteLine("[Test 11] Test-only dependencies are added to IDE include paths only");
+
+        string tempDir = Path.Combine(Path.GetTempPath(), $"EnigmaIdeTestIncludes_{Guid.NewGuid():N}");
+        try
+        {
+            string coreDir = Path.Combine(tempDir, "Engine", "Source", "Runtime", "Core");
+            string automationDir = Path.Combine(tempDir, "Engine", "Source", "Developer", "AutomationTest");
+            Directory.CreateDirectory(Path.Combine(coreDir, "Public"));
+            Directory.CreateDirectory(Path.Combine(coreDir, "Private"));
+            Directory.CreateDirectory(Path.Combine(automationDir, "Public"));
+            Directory.CreateDirectory(Path.Combine(automationDir, "Private"));
+
+            var coreRules = new ModuleRules
+            {
+                ModuleName = "Core",
+                ModuleDirectory = coreDir,
+                PrivateTestDependencyModuleNames = { "AutomationTest" },
+            };
+            var automationRules = new ModuleRules
+            {
+                ModuleName = "AutomationTest",
+                ModuleDirectory = automationDir,
+                PublicDependencyModuleNames = { "Core" },
+            };
+
+            var modules = new Dictionary<string, ModuleRules>(StringComparer.Ordinal)
+            {
+                ["Core"] = coreRules,
+                ["AutomationTest"] = automationRules,
+            };
+
+            var resolve = new DependencyResolver().Resolve(modules);
+            Assert(resolve.Success, $"Dependency resolution should succeed: {resolve.Error}");
+            Assert(resolve.AdjacencyList["Core"].Count == 0,
+                "Core production graph should not include AutomationTest");
+
+            var includePaths = GenerateProjectFilesCommand.ComputeIncludePaths(
+                "Core",
+                coreRules,
+                modules,
+                resolve,
+                Path.Combine(tempDir, "EnigmaArcade"));
+
+            string automationPublic = Path.Combine(automationDir, "Public");
+            string automationPrivate = Path.Combine(automationDir, "Private");
+            Assert(includePaths.Contains(automationPublic, StringComparer.OrdinalIgnoreCase),
+                "Core IDE include paths should contain AutomationTest/Public for module-local tests");
+            Assert(!includePaths.Contains(automationPrivate, StringComparer.OrdinalIgnoreCase),
+                "Core IDE include paths should not expose AutomationTest/Private");
+
+            Console.WriteLine("  PASSED");
+        }
+        finally
+        {
+            DeleteTempWorkspace(tempDir);
+        }
+    }
+
+    private static void DeleteTempWorkspace(string workspace)
+    {
+        string fullWorkspace = Path.GetFullPath(workspace);
+        string tempRoot = Path.GetFullPath(Path.GetTempPath());
+        if (!fullWorkspace.StartsWith(tempRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Refusing to delete non-temp test workspace: {fullWorkspace}");
+        }
+
+        if (Directory.Exists(fullWorkspace))
+        {
+            Directory.Delete(fullWorkspace, recursive: true);
+        }
     }
 
     private static string ResolveEnigmaArcadeRoot()

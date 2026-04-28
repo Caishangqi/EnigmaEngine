@@ -343,10 +343,14 @@ public sealed class CMakeGenerator
 
         // Glob source files (CONFIGURE_DEPENDS: re-scan at build time when files change)
         sb.AppendLine($"file(GLOB_RECURSE {upperName}_SOURCES CONFIGURE_DEPENDS");
+        sb.AppendLine($"    \"{moduleSourceDir}/*.c\"");
+        sb.AppendLine($"    \"{moduleSourceDir}/*.cc\"");
         sb.AppendLine($"    \"{moduleSourceDir}/*.cpp\"");
+        sb.AppendLine($"    \"{moduleSourceDir}/*.cxx\"");
         sb.AppendLine($"    \"{moduleSourceDir}/*.h\"");
         sb.AppendLine($"    \"{moduleSourceDir}/*.hpp\"");
         sb.AppendLine(")");
+        sb.AppendLine($"list(FILTER {upperName}_SOURCES EXCLUDE REGEX \"/Private/Tests/\")");
         sb.AppendLine();
 
         // Add target: executable for Game entry modules, library for others

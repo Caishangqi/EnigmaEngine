@@ -77,19 +77,31 @@ public sealed class CMakeInvoker
     }
 
     /// <summary>
-    /// Run CMake build: <c>cmake --build {buildDir} --config {config} [-j {parallelism}]</c>.
+    /// Run CMake build: <c>cmake --build {buildDir} [--target {target}] --config {config} [-j {parallelism}]</c>.
     /// </summary>
     /// <param name="buildDir">Path to the build directory (same as Configure's buildDir).</param>
     /// <param name="config">Build configuration (e.g. "Development", "DebugGame").</param>
     /// <param name="parallelism">Optional number of parallel jobs. 0 or null = CMake default.</param>
     /// <returns>ProcessResult with exit code and output.</returns>
-    public ProcessResult Build(string buildDir, string config, int? parallelism = null)
+    public ProcessResult Build(
+        string buildDir,
+        string config,
+        int? parallelism = null,
+        string? target = null)
     {
         var args = new List<string>
         {
             "--build", QuotePath(buildDir),
-            "--config", config,
         };
+
+        if (!string.IsNullOrWhiteSpace(target))
+        {
+            args.Add("--target");
+            args.Add(target);
+        }
+
+        args.Add("--config");
+        args.Add(config);
 
         if (parallelism is > 0)
             args.Add($"-j {parallelism.Value}");

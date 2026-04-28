@@ -10,6 +10,7 @@ public class Core : ModuleRules
         PublicIncludePaths.Add("Public");
         PrivateIncludePaths.Add("Private");
 
-        // Core has no module dependencies -- it is the foundation.
+        // Core has no production module dependencies -- it is the foundation.
+        PrivateTestDependencyModuleNames.Add("AutomationTest");
     }
 }

@@ -21,6 +21,12 @@ public sealed class ModuleRules
     /// <summary>Private dependency module names (internal only).</summary>
     public List<string> PrivateDependencyModuleNames { get; init; } = [];
 
+    /// <summary>Public dependency module names used only by automation test targets.</summary>
+    public List<string> PublicTestDependencyModuleNames { get; init; } = [];
+
+    /// <summary>Private dependency module names used only by automation test targets.</summary>
+    public List<string> PrivateTestDependencyModuleNames { get; init; } = [];
+
     /// <summary>Module names loaded dynamically at runtime.</summary>
     public List<string> DynamicallyLoadedModuleNames { get; init; } = [];
 

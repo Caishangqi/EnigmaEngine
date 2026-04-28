@@ -56,6 +56,19 @@ public sealed class SolutionGenerator
         public string OutputPath { get; init; } = string.Empty;
         public int ProjectCount { get; init; }
     }
+
+    public sealed class GenerateEngineOnlyInput
+    {
+        public required string EngineRootPath { get; init; }
+        public required IReadOnlyDictionary<string, ModuleRules> EngineModules { get; init; }
+        public required IReadOnlyDictionary<string, ModuleRules> PluginModules { get; init; }
+        public IReadOnlyDictionary<string, ModuleRules> ThirdPartyModules { get; init; }
+            = new Dictionary<string, ModuleRules>();
+        public required DependencyResolver.ResolveResult ResolveResult { get; init; }
+        public string? BuildToolCsprojPath { get; init; }
+        public PluginScanner.ScanResult? PluginScanResult { get; init; }
+    }
+
     public GenerateResult Generate(GenerateInput input)
     {
         try
@@ -340,6 +353,214 @@ public sealed class SolutionGenerator
 
             // Write output
             string outputPath = Path.Combine(input.ProjectRootPath, $"{input.ProjectName}.sln");
+            AtomicFileWriter.WriteIfChanged(outputPath, sb.ToString());
+
+            return new GenerateResult
+            {
+                Success = true,
+                OutputPath = outputPath,
+                ProjectCount = projectCount,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new GenerateResult
+            {
+                Success = false,
+                Error = ex.Message,
+            };
+        }
+    }
+
+    public GenerateResult GenerateEngineOnly(GenerateEngineOnlyInput input)
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            var nesting = new List<(string child, string parent)>();
+
+            string engineFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine"));
+            string engineSrcGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source"));
+            string runtimeFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Runtime"));
+            string developerFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Developer"));
+            string thirdPartyFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/ThirdParty"));
+            string programsFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Source/Programs"));
+            string enginePluginsFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder("Engine/Plugins"));
+
+            var folders = new (string guid, string name, string? parent)[]
+            {
+                (engineFolderGuid, "Engine", null),
+                (engineSrcGuid, "Source", engineFolderGuid),
+                (runtimeFolderGuid, "Runtime", engineSrcGuid),
+                (developerFolderGuid, "Developer", engineSrcGuid),
+                (thirdPartyFolderGuid, "ThirdParty", engineSrcGuid),
+                (programsFolderGuid, "Programs", engineSrcGuid),
+                (enginePluginsFolderGuid, "Plugins", engineFolderGuid),
+            };
+
+            foreach (var (guid, _, parent) in folders)
+            {
+                if (parent is not null)
+                {
+                    nesting.Add((guid, parent));
+                }
+            }
+
+            var knownProjectNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var name in input.EngineModules.Keys) knownProjectNames.Add(name);
+            foreach (var name in input.PluginModules.Keys) knownProjectNames.Add(name);
+            foreach (var name in input.ThirdPartyModules.Keys) knownProjectNames.Add(name);
+
+            sb.AppendLine();
+            sb.AppendLine("Microsoft Visual Studio Solution File, Format Version 12.00");
+            sb.AppendLine("# Visual Studio Version 17");
+            sb.AppendLine("VisualStudioVersion = 17.0.31314.256");
+            sb.AppendLine("MinimumVisualStudioVersion = 10.0.40219.1");
+
+            foreach (var (guid, name, _) in folders)
+            {
+                sb.AppendLine($"Project(\"{TypeGuids.SolutionFolder}\") = \"{name}\", \"{name}\", \"{guid}\"");
+                sb.AppendLine("EndProject");
+            }
+
+            var perPluginFolderGuids = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (input.PluginScanResult is not null)
+            {
+                foreach (var (pluginName, descriptor) in input.PluginScanResult.EnabledPlugins)
+                {
+                    if (!descriptor.Modules.Any(module => input.PluginModules.ContainsKey(module.Name)))
+                    {
+                        continue;
+                    }
+
+                    string pluginFolderGuid = FormatGuid(GuidGenerator.GenerateForFolder($"Engine/Plugins/{pluginName}"));
+                    perPluginFolderGuids[pluginName] = pluginFolderGuid;
+                    sb.AppendLine($"Project(\"{TypeGuids.SolutionFolder}\") = \"{pluginName}\", \"{pluginName}\", \"{pluginFolderGuid}\"");
+                    sb.AppendLine("EndProject");
+                    nesting.Add((pluginFolderGuid, enginePluginsFolderGuid));
+                }
+            }
+
+            int projectCount = 0;
+
+            foreach (var (moduleName, rules) in input.EngineModules.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
+                string vcxprojRelative = $"{moduleName}.vcxproj";
+                var deps = GetProjectDependencies(moduleName, input.ResolveResult, knownProjectNames);
+                WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, vcxprojRelative, projGuid, deps);
+
+                bool isDeveloper = !string.IsNullOrEmpty(rules.ModuleDirectory)
+                    && rules.ModuleDirectory.Replace('\\', '/').Contains("/Developer/");
+                nesting.Add((projGuid, isDeveloper ? developerFolderGuid : runtimeFolderGuid));
+                projectCount++;
+            }
+
+            var pluginModuleToPlugin = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (input.PluginScanResult is not null)
+            {
+                foreach (var (pluginName, descriptor) in input.PluginScanResult.EnabledPlugins)
+                {
+                    foreach (var moduleDesc in descriptor.Modules)
+                    {
+                        pluginModuleToPlugin[moduleDesc.Name] = pluginName;
+                    }
+                }
+            }
+
+            string solutionDir = Path.Combine(input.EngineRootPath, "Intermediate", "ProjectFiles");
+            foreach (var (moduleName, rules) in input.PluginModules.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
+                string ownerPlugin = pluginModuleToPlugin.GetValueOrDefault(moduleName, "Plugins");
+                string pluginProjectDir = Path.Combine(input.EngineRootPath, "Plugins", ownerPlugin, "Intermediate", "ProjectFiles");
+                string vcxprojRelative = Path.GetRelativePath(solutionDir, pluginProjectDir)
+                    .Replace('/', '\\') + $"\\{moduleName}.vcxproj";
+                var deps = GetProjectDependencies(moduleName, input.ResolveResult, knownProjectNames);
+                WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, vcxprojRelative, projGuid, deps);
+
+                nesting.Add((projGuid,
+                    perPluginFolderGuids.TryGetValue(ownerPlugin, out var pluginFolderGuid)
+                        ? pluginFolderGuid
+                        : enginePluginsFolderGuid));
+                projectCount++;
+            }
+
+            foreach (var (moduleName, _) in input.ThirdPartyModules.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
+                WriteProjectEntry(sb, TypeGuids.CppProject, moduleName, $"{moduleName}.vcxproj", projGuid, null);
+                nesting.Add((projGuid, thirdPartyFolderGuid));
+                projectCount++;
+            }
+
+            if (input.BuildToolCsprojPath is not null)
+            {
+                string btGuid = FormatGuid(GuidGenerator.GenerateForProject("BuildTool"));
+                string btRelative = Path.GetRelativePath(solutionDir, input.BuildToolCsprojPath)
+                    .Replace('/', '\\');
+                WriteProjectEntry(sb, TypeGuids.CSharpProject, "BuildTool", btRelative, btGuid, null);
+                nesting.Add((btGuid, programsFolderGuid));
+                projectCount++;
+            }
+
+            sb.AppendLine("Global");
+            sb.AppendLine("\tGlobalSection(SolutionConfigurationPlatforms) = preSolution");
+            foreach (var (config, platform) in SolutionConfigs)
+            {
+                sb.AppendLine($"\t\t{config}|{platform} = {config}|{platform}");
+            }
+            sb.AppendLine("\tEndGlobalSection");
+
+            sb.AppendLine("\tGlobalSection(ProjectConfigurationPlatforms) = postSolution");
+            foreach (var moduleName in input.EngineModules.Keys.Concat(input.PluginModules.Keys))
+            {
+                string projGuid = FormatGuid(GuidGenerator.GenerateForProject(moduleName));
+                foreach (var (config, platform) in SolutionConfigs)
+                {
+                    bool isPackage = config.StartsWith("Package", StringComparison.Ordinal);
+                    sb.AppendLine($"\t\t{projGuid}.{config}|{platform}.ActiveCfg = {config}|{platform}");
+                    if (!isPackage)
+                    {
+                        sb.AppendLine($"\t\t{projGuid}.{config}|{platform}.Build.0 = {config}|{platform}");
+                    }
+                }
+            }
+
+            foreach (var name in input.ThirdPartyModules.Keys)
+            {
+                string projGuid = FormatGuid(GuidGenerator.GenerateForProject(name));
+                foreach (var (config, platform) in SolutionConfigs)
+                {
+                    sb.AppendLine($"\t\t{projGuid}.{config}|{platform}.ActiveCfg = {config}|{platform}");
+                }
+            }
+
+            if (input.BuildToolCsprojPath is not null)
+            {
+                string projGuid = FormatGuid(GuidGenerator.GenerateForProject("BuildTool"));
+                foreach (var (config, platform) in SolutionConfigs)
+                {
+                    sb.AppendLine($"\t\t{projGuid}.{config}|{platform}.ActiveCfg = Development|Any CPU");
+                    sb.AppendLine($"\t\t{projGuid}.{config}|{platform}.Build.0 = Development|Any CPU");
+                }
+            }
+            sb.AppendLine("\tEndGlobalSection");
+
+            sb.AppendLine("\tGlobalSection(SolutionProperties) = preSolution");
+            sb.AppendLine("\t\tHideSolutionNode = FALSE");
+            sb.AppendLine("\tEndGlobalSection");
+
+            sb.AppendLine("\tGlobalSection(NestedProjects) = preSolution");
+            foreach (var (child, parent) in nesting)
+            {
+                sb.AppendLine($"\t\t{child} = {parent}");
+            }
+            sb.AppendLine("\tEndGlobalSection");
+            sb.AppendLine("EndGlobal");
+
+            Directory.CreateDirectory(solutionDir);
+            string outputPath = Path.Combine(solutionDir, "EnigmaEngine.sln");
             AtomicFileWriter.WriteIfChanged(outputPath, sb.ToString());
 
             return new GenerateResult

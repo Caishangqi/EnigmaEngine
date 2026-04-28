@@ -16,12 +16,14 @@ public static class Program
         ["clean"] = new CleanCommand(),
         ["rebuild"] = new RebuildCommand(),
         ["generate-project-files"] = new GenerateProjectFilesCommand(),
+        ["generate-engine-project-files"] = new GenerateEngineProjectFilesCommand(),
         ["package"] = new PackageCommand(),
         ["create-module"] = new CreateModuleCommand(),
         ["create-plugin"] = new CreatePluginCommand(),
         ["create-project"] = new CreateProjectCommand(),
         ["remove-module"] = new RemoveModuleCommand(),
         ["remove-plugin"] = new RemovePluginCommand(),
+        ["automation-test"] = new AutomationTestCommand(),
     };
 
     public static int Main(string[] args)
@@ -86,9 +88,11 @@ public static class Program
         string? outputDirectory = null;
         int optionStart = 1;
 
-        // For generate-project-files, project path is optional (auto-search)
+        // For generate-project-files and automation-test, project path is optional (auto-search or engine mode)
         bool projectPathOptional = commandName.Equals("generate-project-files", StringComparison.OrdinalIgnoreCase)
-            || commandName.Equals("create-project", StringComparison.OrdinalIgnoreCase);
+            || commandName.Equals("generate-engine-project-files", StringComparison.OrdinalIgnoreCase)
+            || commandName.Equals("create-project", StringComparison.OrdinalIgnoreCase)
+            || commandName.Equals("automation-test", StringComparison.OrdinalIgnoreCase);
 
         // Check for positional project path (non-option second argument)
         if (args.Length >= 2 && !args[1].StartsWith('-'))
@@ -131,13 +135,13 @@ public static class Program
                     if (args[i].StartsWith("--") && i + 1 < args.Length && !args[i + 1].StartsWith("--"))
                     {
                         var key = args[i][2..];
-                        extraArguments[key] = args[++i];
+                        AddExtraArgument(extraArguments, key, args[++i]);
                     }
                     else if (args[i].StartsWith("--"))
                     {
                         // Boolean flag (no value following)
                         var key = args[i][2..];
-                        extraArguments[key] = "";
+                        AddExtraArgument(extraArguments, key, "");
                     }
                     else
                     {
@@ -165,6 +169,19 @@ public static class Program
         };
     }
 
+    private static void AddExtraArgument(Dictionary<string, string> extraArguments, string key, string value)
+    {
+        if (extraArguments.TryGetValue(key, out var existingValue))
+        {
+            extraArguments[key] = string.IsNullOrEmpty(existingValue)
+                ? value
+                : $"{existingValue};{value}";
+            return;
+        }
+
+        extraArguments[key] = value;
+    }
+
     private static void PrintUsage()
     {
         Console.WriteLine("EnigmaEngine BuildTool v0.1.0");
@@ -183,6 +200,19 @@ public static class Program
         Console.WriteLine("  -p, --platform <plat>    Target platform (default: Win64)");
         Console.WriteLine("  -o, --output <path>      Output directory for package command");
         Console.WriteLine("  -h, --help               Show this help message");
+        Console.WriteLine();
+        Console.WriteLine("Automation test options:");
+        Console.WriteLine("  --engine                 Treat path as engine root instead of project path");
+        Console.WriteLine("  --list                   List matching automation tests");
+        Console.WriteLine("  --run                    Run matching automation tests");
+        Console.WriteLine("  --generate-ide           Generate IDE files/run configurations for automation tests");
+        Console.WriteLine("  --profile <profile>      local-fast|ci-standard|all-non-perf|perf");
+        Console.WriteLine("  --name <name>            Run/list exact hierarchical test name");
+        Console.WriteLine("  --name-prefix <prefix>   Run/list tests under a hierarchical prefix");
+        Console.WriteLine("  --module <module>        Filter tests by module");
+        Console.WriteLine("  --tag <tag>              Filter tests by tag; repeat or comma-separate");
+        Console.WriteLine("  --report <path>          Report output directory");
+        Console.WriteLine("  --allow-empty            Allow filters that match zero tests");
     }
 
     /// <summary>
@@ -193,6 +223,7 @@ public static class Program
         var suites = new Dictionary<string, Action>(StringComparer.OrdinalIgnoreCase)
         {
             ["module-parser"] = Tests.ModuleParserTest.Run,
+            ["target-parser"] = Tests.TargetParserTest.Run,
             ["dependency-resolver"] = Tests.DependencyResolverTest.Run,
             ["cmake-generator"] = Tests.CMakeGeneratorTest.Run,
             ["plugin-parser"] = Tests.PluginParserTest.Run,
@@ -211,6 +242,9 @@ public static class Program
             ["solution-generator"] = Tests.SolutionGeneratorTest.Run,
             ["generate-project-files"] = Tests.GenerateProjectFilesCommandTest.Run,
             ["project-scanner"] = Tests.ProjectScannerTest.Run,
+            ["automation-test-command"] = Tests.AutomationTestCommandTest.Run,
+            ["automation-test-scanner"] = Tests.AutomationTestScannerTest.Run,
+            ["automation-test-generator"] = Tests.AutomationTestBuildGeneratorTest.Run,
             ["cmake-invoker"] = Tests.CMakeInvokerTest.Run,
             ["post-build-step"] = Tests.PostBuildStepTest.Run,
             ["build-pipeline"] = Tests.BuildPipelineTest.Run,
