@@ -8,6 +8,8 @@
 Binaries/
 Intermediate/
 build/
+!Engine/Source/Programs/BuildTool/Source/BuildTool/Build/
+!Engine/Source/Programs/BuildTool/Source/BuildTool/Build/*.cs
 cmake-build-*/
 CMakeCache.txt
 CMakeFiles/
@@ -94,6 +96,7 @@ nul
 # Reference Projects (local symlinks, machine-specific)
 # -----------------------------------------------------------------------------
 Reference/
+.reference/
 
 # -----------------------------------------------------------------------------
 # Tool-specific
