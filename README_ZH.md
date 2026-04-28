@@ -25,7 +25,8 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - INI 配置系统：UE 风格分层配置，4 层合并（引擎基础 → 插件 → 项目默认 → 用户本地），类型化读写、数组操作符、插件双轨支持
 - 项目脚手架：一键创建项目、模块、插件，自动生成模板代码和配置文件
 - 多配置构建：Debug / DebugGame / Development / Shipping / Test 五种构建配置
-- Visual Studio 集成：自动生成 `.sln` 和 `.vcxproj` 项目文件
+- Visual Studio / Rider 集成：自动生成 `.sln`、`.vcxproj`、engine-only workspace 和 Rider 运行配置
+- AutomationTest 框架：UE 风格测试编写 API，复用 GoogleTest 后端，由 BuildTool 负责发现、过滤、运行和 JSON 报告
 - Unreal 风格 API：熟悉的命名约定和架构模式（ModuleRules、TargetRules、GameInstance）
 - 核心数学库：FVector、FMatrix、FQuat、FRotator、FTransform 等完整 3D 数学类型，右手 Y-up 坐标系，constexpr 友好
 - 委托与事件系统：类型安全的 TDelegate、TMulticastDelegate，FDelegateHandle 生命周期管理，支持静态/Lambda/成员函数绑定
@@ -72,9 +73,35 @@ BuildTool rebuild <project-path>
 # 生成 Visual Studio 解决方案
 BuildTool generate-project-files <project-path>
 
+# 生成引擎专用 workspace
+BuildTool generate-engine-project-files <repo-root>
+
+# 列出 / 运行自动化测试
+BuildTool automation-test <project-path> --list --profile all-non-perf
+BuildTool automation-test <project-path> --run --profile local-fast --report Saved/AutomationReports
+BuildTool automation-test <repo-root> --engine --run --profile ci-standard
+
 # 打包发布（自动使用 Shipping 配置）
 BuildTool package <project-path> -o <output-path>
 ```
+
+### 自动化测试
+
+新测试应靠近被测模块：
+
+```text
+Engine/Source/Runtime/Core/Private/Tests/NameAutomationTests.cpp
+Engine/Source/Developer/DirectoryWatcher/Private/Tests/DirectoryWatcherAutomationTests.cpp
+EnigmaArcade/Source/EnigmaArcade/Private/Tests/MyGameAutomationTests.cpp
+```
+
+包含 `Private/Tests` 的模块应在自己的 `.Build.cs` 中声明测试专用依赖：
+
+```csharp
+PrivateTestDependencyModuleNames.Add("AutomationTest");
+```
+
+根目录 `Tests/` 仍是 legacy standalone GoogleTest baseline。新覆盖率优先写入模块本地 `Private/Tests/`。
 
 ### 项目脚手架
 
@@ -123,26 +150,31 @@ Shipping 构建生成单一的单体可执行文件：
 
 EXE 通过 `--project-dir=` 命令行参数在运行时定位游戏 DLL（VS 调试器设置中已自动配置）。
 
+## 持续集成
+
+CI 会构建 BuildTool，运行 BuildTool 验证套件，使用 `ci-standard` profile 运行引擎 AutomationTest，保持 legacy standalone GoogleTest 项目通过，并验证示例项目构建和打包流程。
+
 ## 模块
 
 | **名称** | **说明** | **状态** |
 |----------|:--------:|:--------:|
-| `Enigma::Core` | 基础模块，提供模块系统、日志、断言、平台抽象层（HAL）、委托/事件系统（TDelegate、TMulticastDelegate）、INI 配置系统（FConfigCacheIni、GConfig）、核心数学类型（FVector、FMatrix、FQuat、FRotator、FTransform）、异步任务基础设施（FThreadPool、FTaskGraph）和 FTSTicker 线程安全帧定时器 | stable |
-| `Enigma::ApplicationCore` | 平台无关的应用程序和窗口抽象（FGenericApplication、FGenericWindow、FGenericApplicationMessageHandler），含 Win32 实现 | stable |
-| `Enigma::RenderCore` | 渲染器接口抽象层（IRendererModule），将引擎与具体渲染器实现解耦 | stable |
-| `Enigma::AsciiRenderer` | ASCII 字符渲染器，帧缓冲、Z 深度排序、场景视图摄像机、VT100 终端输出 | stable |
-| `Enigma::Engine` | 引擎核心，提供 FEngineLoop 引擎循环、FGameEngine 配置驱动窗口创建、FGameInstance 游戏实例、SubsystemCollection 子系统集合、FTickTaskManager Tick 调度、FScene/FGameObject/FComponent 游戏对象框架（场景驱动 BeginPlay 生命周期）和模块加载阶段管理 | stable |
-| `Enigma::Launch` | 入口点模块，提供 GuardedMain 守护主函数和平台特定启动逻辑（main / WinMain） | stable |
-| `Enigma::EnhancedInput` | 基于动作的输入系统，支持触发器、修饰器和映射上下文（引擎插件） | stable |
-| `Enigma::DirectoryWatcher` | 通过 Windows overlapped I/O + APC 实现实时文件系统监控，与 FTSTicker 集成（开发者工具，Shipping 构建排除） | stable |
-| `Enigma::HotReload` | 版本化 DLL 热重载系统，匹配 UE 模式，支持 IDE 构建自动检测（开发者工具，Shipping 构建排除） | stable |
+| `Enigma::Core` | 基础类型、模块、日志、配置、委托、数学、异步任务和 ticker | stable |
+| `Enigma::ApplicationCore` | 应用、窗口和消息泵抽象 | stable |
+| `Enigma::RenderCore` | 渲染接口抽象层 | stable |
+| `Enigma::AsciiRenderer` | ASCII 帧缓冲渲染与场景视图输出 | stable |
+| `Enigma::Engine` | 引擎循环、游戏实例、子系统、Tick、场景、对象和组件运行时 | stable |
+| `Enigma::Launch` | 可执行入口点和守护启动 | stable |
+| `Enigma::EnhancedInput` | 基于动作的输入插件 | stable |
+| `Enigma::DirectoryWatcher` | 开发者文件系统监控 | stable |
+| `Enigma::HotReload` | 开发者 DLL 热重载支持 | stable |
+| `Enigma::AutomationTest` | 开发者自动化测试 API 与注册表 | experimental |
 
 ## 第三方库
 
 | **名称** | **说明** | **链接** |
 |----------|:--------:|:--------:|
 | `nlohmann::json` | JSON for Modern C++ | [Github](https://github.com/nlohmann/json) |
-| `Google Test` | C++ 单元测试框架 (git submodule) | [Github](https://github.com/google/googletest) |
+| `Google Test` | AutomationTest 后端与 legacy standalone 测试框架 (git submodule) | [Github](https://github.com/google/googletest) |
 
 ## 项目结构
 
@@ -161,10 +193,12 @@ EnigmaEngine/
         Engine/                    引擎循环、GameEngine、GameInstance、SubsystemCollection、TickSystem、Scene/GameObject/Component
         Launch/                    入口点 (GuardedMain, main/WinMain)
       Developer/                 开发者工具（Shipping 构建排除）
+        AutomationTest/            自动化测试 API 与注册表
         DirectoryWatcher/          实时文件系统监控 (Windows overlapped I/O)
         HotReload/                 版本化 DLL 热重载系统
       ThirdParty/                第三方库 (nlohmann_json, googletest)
       Programs/
+        AutomationTestRunner/     独立自动化测试 runner
         BuildTool/               C# .NET 9 命令行构建工具
     Plugins/
       EnhancedInput/             引擎插件：基于动作的输入系统
@@ -184,8 +218,10 @@ EnigmaEngine/
         Source/ArcadeFeature/      模块源码 (Public/ + Private/)
     Binaries/Win64/              游戏 DLL（模块化）或单体 EXE（Shipping）
     Intermediate/                构建中间文件 + 生成的 .vcxproj 文件
+  .clang-format                  C++ 格式规则
+  .editorconfig                  编辑器与 C# 分析规则
   Tests/
-    Core.Math.Tests/             Core 数学库单元测试 (GoogleTest, 284+ 个测试)
+    Core.Math.Tests/             legacy standalone GoogleTest baseline
     Core.Delegates.Tests/        委托系统单元测试 (GoogleTest, 37 个测试)
     Core.Config.Tests/           配置系统单元测试 (GoogleTest)
     Core.ThreadPool.Tests/       线程池单元测试 (GoogleTest)

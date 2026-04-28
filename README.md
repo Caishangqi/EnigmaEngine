@@ -25,7 +25,8 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - INI config system: UE-style layered config with 4-layer merging (Engine Base → Plugin → Project Default → User), typed getters/setters, array operators, plugin dual-track support
 - Project scaffolding: one-command creation of projects, modules, and plugins with auto-generated template code and configuration
 - Multi-configuration builds: Debug / DebugGame / Development / Shipping / Test
-- Visual Studio integration: auto-generated `.sln` and `.vcxproj` project files
+- Visual Studio / Rider integration: generated `.sln`, `.vcxproj`, engine-only workspace, and Rider run configurations
+- AutomationTest framework: UE-style test authoring with a GoogleTest backend, BuildTool-driven discovery, filtering, execution, and JSON reports
 - Unreal-style API: familiar naming conventions and architectural patterns (ModuleRules, TargetRules, GameInstance)
 - Core math library: FVector, FMatrix, FQuat, FRotator, FTransform and more, right-hand Y-up coordinate system, constexpr-friendly
 - Delegate & event system: type-safe TDelegate, TMulticastDelegate with FDelegateHandle lifecycle management, supports static/lambda/member function bindings
@@ -72,9 +73,35 @@ BuildTool rebuild <project-path>
 # Generate Visual Studio solution
 BuildTool generate-project-files <project-path>
 
+# Generate engine-only workspace
+BuildTool generate-engine-project-files <repo-root>
+
+# List / run automation tests
+BuildTool automation-test <project-path> --list --profile all-non-perf
+BuildTool automation-test <project-path> --run --profile local-fast --report Saved/AutomationReports
+BuildTool automation-test <repo-root> --engine --run --profile ci-standard
+
 # Package for distribution (forces Shipping configuration)
 BuildTool package <project-path> -o <output-path>
 ```
+
+### Automation Tests
+
+New tests should live next to the module they validate:
+
+```text
+Engine/Source/Runtime/Core/Private/Tests/NameAutomationTests.cpp
+Engine/Source/Developer/DirectoryWatcher/Private/Tests/DirectoryWatcherAutomationTests.cpp
+EnigmaArcade/Source/EnigmaArcade/Private/Tests/MyGameAutomationTests.cpp
+```
+
+Modules with `Private/Tests` sources should declare test-only dependencies in their `.Build.cs` files:
+
+```csharp
+PrivateTestDependencyModuleNames.Add("AutomationTest");
+```
+
+The root `Tests/` directory remains the legacy standalone GoogleTest baseline. Prefer module-local `Private/Tests/` for new coverage.
 
 ### Project Scaffolding
 
@@ -123,26 +150,31 @@ Shipping builds produce a single monolithic executable:
 
 The EXE locates game DLLs at runtime via `--project-dir=` command line argument (auto-configured in VS debugger settings).
 
+## Continuous Integration
+
+CI builds BuildTool, runs BuildTool validation suites, runs engine AutomationTest with the `ci-standard` profile, keeps the legacy standalone GoogleTest projects green, and verifies the example project build/package flow.
+
 ## Modules
 
 | **Name** | **Description** | **Status** |
 |----------|:---------------:|:----------:|
-| `Enigma::Core` | Foundation module providing the module system, logging, assertions, HAL platform abstraction, delegate/event system (TDelegate, TMulticastDelegate), INI config system (FConfigCacheIni, GConfig), core math types (FVector, FMatrix, FQuat, FRotator, FTransform), async task infrastructure (FThreadPool, FTaskGraph), and FTSTicker thread-safe frame ticker | stable |
-| `Enigma::ApplicationCore` | Platform-agnostic application and window abstraction (FGenericApplication, FGenericWindow, FGenericApplicationMessageHandler) with Win32 implementation | stable |
-| `Enigma::RenderCore` | Renderer interface abstraction layer (IRendererModule) decoupling engine from concrete renderer implementations | stable |
-| `Enigma::AsciiRenderer` | ASCII art renderer with frame-buffer, Z-depth sorting, scene view camera, and VT100 terminal output | stable |
-| `Enigma::Engine` | Engine core providing FEngineLoop, FGameEngine with config-driven window creation, FGameInstance, SubsystemCollection, FTickTaskManager tick scheduling, FScene/FGameObject/FComponent game object framework with scene-driven BeginPlay lifecycle, and module loading phase management | stable |
-| `Enigma::Launch` | Entry point module providing GuardedMain and platform-specific launch logic (main / WinMain) | stable |
-| `Enigma::EnhancedInput` | Action-based input system with triggers, modifiers, and mapping contexts (engine plugin) | stable |
-| `Enigma::DirectoryWatcher` | Real-time file system monitoring via Windows overlapped I/O + APC, integrated with FTSTicker (developer tool, excluded from Shipping) | stable |
-| `Enigma::HotReload` | Versioned DLL hot-reload system matching UE's pattern, with automatic IDE build detection (developer tool, excluded from Shipping) | stable |
+| `Enigma::Core` | Foundation types, modules, logging, config, delegates, math, async tasks, and ticker | stable |
+| `Enigma::ApplicationCore` | Cross-platform application, window, and message-pump abstraction | stable |
+| `Enigma::RenderCore` | Renderer-facing abstraction layer | stable |
+| `Enigma::AsciiRenderer` | ASCII frame-buffer renderer and scene view output | stable |
+| `Enigma::Engine` | Engine loop, game instance, subsystems, tick, scene, object, and component runtime | stable |
+| `Enigma::Launch` | Executable entry point and guarded startup | stable |
+| `Enigma::EnhancedInput` | Action-based input plugin | stable |
+| `Enigma::DirectoryWatcher` | Developer file-system watcher | stable |
+| `Enigma::HotReload` | Developer DLL hot-reload support | stable |
+| `Enigma::AutomationTest` | Developer automation test API and registry | experimental |
 
 ## Third Party
 
 | **Name** | **Description** | **Link** |
 |----------|:---------------:|:--------:|
 | `nlohmann::json` | JSON for Modern C++ | [Github](https://github.com/nlohmann/json) |
-| `Google Test` | C++ unit testing framework (git submodule) | [Github](https://github.com/google/googletest) |
+| `Google Test` | AutomationTest backend and legacy standalone test framework (git submodule) | [Github](https://github.com/google/googletest) |
 
 ## Project Structure
 
@@ -161,10 +193,12 @@ EnigmaEngine/
         Engine/                    Engine loop, GameEngine, GameInstance, SubsystemCollection, TickSystem, Scene/GameObject/Component
         Launch/                    Entry point (GuardedMain, main/WinMain)
       Developer/                 Developer tools (excluded from Shipping builds)
+        AutomationTest/            Automation test API and registry
         DirectoryWatcher/          Real-time file system monitoring (Windows overlapped I/O)
         HotReload/                 Versioned DLL hot-reload system
       ThirdParty/                Third-party libraries (nlohmann_json, googletest)
       Programs/
+        AutomationTestRunner/     Standalone automation test runner
         BuildTool/               C# .NET 9 CLI build tool
     Plugins/
       EnhancedInput/             Engine plugin: action-based input system
@@ -184,8 +218,10 @@ EnigmaEngine/
         Source/ArcadeFeature/      Module source (Public/ + Private/)
     Binaries/Win64/              Game DLLs (Modular) or monolithic EXE (Shipping)
     Intermediate/                Build intermediates + generated .vcxproj files
+  .clang-format                  C++ formatting rules
+  .editorconfig                  Editor and C# analysis rules
   Tests/
-    Core.Math.Tests/             Core math unit tests (GoogleTest, 284+ tests)
+    Core.Math.Tests/             Legacy standalone GoogleTest baseline
     Core.Delegates.Tests/        Delegate system unit tests (GoogleTest, 37 tests)
     Core.Config.Tests/           Config system unit tests (GoogleTest)
     Core.ThreadPool.Tests/       Thread pool unit tests (GoogleTest)
