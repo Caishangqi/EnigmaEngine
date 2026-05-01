@@ -29,6 +29,7 @@ Enigma Engine is a C++ game engine designed from the ground up for voxel game de
 - AutomationTest framework: UE-style test authoring with a GoogleTest backend, BuildTool-driven discovery, filtering, execution, and JSON reports
 - Unreal-style API: familiar naming conventions and architectural patterns (ModuleRules, TargetRules, GameInstance)
 - Core math library: FVector, FMatrix, FQuat, FRotator, FTransform and more, right-hand Y-up coordinate system, constexpr-friendly
+- Core containers: phase 1 `TArray`, `TArrayView`, and opt-in `Enigma::Algo` find/sort utilities
 - Delegate & event system: type-safe TDelegate, TMulticastDelegate with FDelegateHandle lifecycle management, supports static/lambda/member function bindings
 - Engine subsystem framework: extensible SubsystemCollection with automatic lifecycle management, similar to UE's subsystem architecture
 - Async task infrastructure: FThreadPool for general-purpose thread pooling, FTaskGraph for dependency-based parallel task scheduling with named tasks and prerequisite chains
@@ -102,6 +103,37 @@ PrivateTestDependencyModuleNames.Add("AutomationTest");
 ```
 
 The root `Tests/` directory is reserved for standalone build and module validation projects. Prefer module-local `Private/Tests/` for module and feature coverage.
+
+### Core Containers and Algorithms
+
+Phase 1 Core containers live under `Engine/Source/Runtime/Core/Public/Containers/`:
+
+- `TArray<T, AllocatorType = FDefaultAllocator>` is an owning contiguous array. It owns raw storage, tracks `Num()` and `Max()`, grows deterministically when `Add`/`Emplace` need capacity, and exposes `Reserve`, `Reset`, `Empty`, checked `operator[]`, `Last`, `Add`, `Emplace`, `Append`, `Pop`, `RemoveAt`, `RemoveAtSwap`, and pointer-compatible iteration.
+- `TArrayView<T>` and `TConstArrayView<T>` are non-owning contiguous views. They can reference pointer/count inputs, C arrays, and `TArray`; they do not extend the referenced data lifetime.
+- `CoreMinimal.h` includes `Containers/Array.h` and `Containers/ArrayView.h`.
+- `Algo/Find.h` and `Algo/Sort.h` are explicit opt-in includes. `Find`/`FindByPredicate` return pointers or `nullptr`; `IndexOf` variants return `-1` when not found; `Sort` delegates to `std::sort` with optional comparator support.
+
+Container code follows the engine assertion policy instead of C++ exception handling. Invalid checked access is programmer error: Debug/Development uses `checkf` with UE-shaped diagnostics, while Shipping compiles checks out. Fatal assertion paths are validated through AutomationTest death assertions such as `ENIGMA_EXPECT_FATAL_ASSERT`, not through test-only production helper APIs.
+
+Current validation commands:
+
+```bash
+BuildTool automation-test <repo-root> --engine --run --name-prefix System.AutomationTest.DeathTest --profile local-fast
+BuildTool automation-test <repo-root> --engine --run --name-prefix System.Core.Containers --profile local-fast
+BuildTool automation-test <repo-root> --engine --run --name-prefix System.Core.Algo --profile local-fast
+```
+
+### Future Updates and Improvements
+
+| Area | Planned Work | Status |
+|------|:-------------|:-------|
+| Container coverage | `TMap`, `TSet`, `TQueue`, `TBitArray`, `TSparseArray`, string/name-adjacent containers | Deferred |
+| Iterator model | Custom/debug iterators, mutation detection, invalidation diagnostics, shared cross-container policy | Deferred |
+| Allocators | Inline allocators, fixed allocators, slack/growth tuning, allocator stress tests, memory statistics hooks | Deferred |
+| Algorithms | Binary search, stable sort, heap utilities, projections, graph traversal, topological sort, remaining Hello Algo categories | Deferred |
+| Performance | Benchmarks against `std::vector` and standard algorithms before hot-path adoption | Deferred |
+| Engine adoption | Scoped pilot refactors before broad `std::vector` replacement; API, call sites, tests, docs, and benchmarks must move together | Deferred |
+| References | Hello Algo is a coverage map; Unreal Engine 5.7 is an API-shape and error-policy reference, not source to copy | Ongoing |
 
 ### Project Scaffolding
 

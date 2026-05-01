@@ -29,6 +29,7 @@ Enigma Engine 是一款专为体素游戏开发设计的 C++ 游戏引擎。采�
 - AutomationTest 框架：UE 风格测试编写 API，复用 GoogleTest 后端，由 BuildTool 负责发现、过滤、运行和 JSON 报告
 - Unreal 风格 API：熟悉的命名约定和架构模式（ModuleRules、TargetRules、GameInstance）
 - 核心数学库：FVector、FMatrix、FQuat、FRotator、FTransform 等完整 3D 数学类型，右手 Y-up 坐标系，constexpr 友好
+- 核心容器：第一阶段 `TArray`、`TArrayView` 和显式引入的 `Enigma::Algo` 查找/排序工具
 - 委托与事件系统：类型安全的 TDelegate、TMulticastDelegate，FDelegateHandle 生命周期管理，支持静态/Lambda/成员函数绑定
 - 引擎子系统框架：可扩展的 SubsystemCollection，自动生命周期管理，类似 UE 的子系统架构
 - 异步任务基础设施：FThreadPool 通用线程池、FTaskGraph 基于依赖的并行任务调度，支持命名任务和前置依赖链
@@ -102,6 +103,37 @@ PrivateTestDependencyModuleNames.Add("AutomationTest");
 ```
 
 根目录 `Tests/` 仅保留独立构建和模块验证项目。模块和功能覆盖率优先写入模块本地 `Private/Tests/`。
+
+### 核心容器与算法
+
+第一阶段核心容器位于 `Engine/Source/Runtime/Core/Public/Containers/`：
+
+- `TArray<T, AllocatorType = FDefaultAllocator>` 是拥有内存的连续数组。它管理 raw storage，跟踪 `Num()` 和 `Max()`，在 `Add`/`Emplace` 需要容量时按确定性策略增长，并提供 `Reserve`、`Reset`、`Empty`、checked `operator[]`、`Last`、`Add`、`Emplace`、`Append`、`Pop`、`RemoveAt`、`RemoveAtSwap` 和 pointer-compatible iteration。
+- `TArrayView<T>` 与 `TConstArrayView<T>` 是非拥有连续视图。它们可以引用 pointer/count、C array 和 `TArray`，但不会延长被引用数据的生命周期。
+- `CoreMinimal.h` 已包含 `Containers/Array.h` 和 `Containers/ArrayView.h`。
+- `Algo/Find.h` 与 `Algo/Sort.h` 需要使用者显式 include。`Find`/`FindByPredicate` 返回指针或 `nullptr`；`IndexOf` 变体未找到时返回 `-1`；`Sort` 委托给 `std::sort`，支持自定义 comparator。
+
+容器代码遵循引擎断言策略，而不是 C++ exception 处理。非法 checked access 属于程序员错误：Debug/Development 使用带 UE 风格诊断文本的 `checkf`，Shipping 会编译移除检查。Fatal assertion 路径通过 `ENIGMA_EXPECT_FATAL_ASSERT` 等 AutomationTest death assertion 验证，不添加测试专用的生产 helper API。
+
+当前验证命令：
+
+```bash
+BuildTool automation-test <repo-root> --engine --run --name-prefix System.AutomationTest.DeathTest --profile local-fast
+BuildTool automation-test <repo-root> --engine --run --name-prefix System.Core.Containers --profile local-fast
+BuildTool automation-test <repo-root> --engine --run --name-prefix System.Core.Algo --profile local-fast
+```
+
+### 未来更新与待改进
+
+| 范围 | 计划内容 | 状态 |
+|------|:--------|:-----|
+| 容器覆盖 | `TMap`、`TSet`、`TQueue`、`TBitArray`、`TSparseArray`、字符串/Name 相关容器 | 待后续 spec |
+| 迭代器模型 | 自定义/调试迭代器、mutation 检测、失效诊断、跨容器共享策略 | 待后续 spec |
+| Allocator | inline allocator、fixed allocator、slack/growth 调优、allocator 压力测试、内存统计 hook | 待后续 spec |
+| 算法 | binary search、stable sort、heap 工具、projection、graph traversal、topological sort、剩余 Hello Algo 类别 | 待后续 spec |
+| 性能 | 在 hot path 采用前建立对比 `std::vector` 和标准算法的 benchmark | 待后续 spec |
+| 引擎采用 | 广泛替换 `std::vector` 前先做 scoped pilot refactor；API、调用点、测试、文档和 benchmark 必须同步更新 | 待后续 spec |
+| 参考边界 | Hello Algo 只作为覆盖图；Unreal Engine 5.7 只作为 API 形态和错误处理策略参考，不复制源码 | 持续遵守 |
 
 ### 项目脚手架
 
