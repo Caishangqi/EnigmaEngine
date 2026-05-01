@@ -24,6 +24,10 @@
 // Assertion macros
 #include "Misc/AssertionMacros.h"
 
+// Containers
+#include "Containers/Array.h"
+#include "Containers/ArrayView.h"
+
 // Delegate system (forward declarations)
 #include "Delegates/DelegateFwd.h"
 
