@@ -13,6 +13,7 @@ void FAutomationGoogleTestBridge::Initialize(int* Argc, char** Argv)
 {
 #if ENIGMA_WITH_AUTOMATION_TESTS
     ::testing::InitGoogleTest(Argc, Argv);
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
 #else
     (void)Argc;
     (void)Argv;

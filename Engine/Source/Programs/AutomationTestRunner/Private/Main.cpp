@@ -59,6 +59,7 @@ struct FRunnerOptions
     std::string ReportPath;
     bool bAllowEmpty = false;
     bool bIncludeDisabled = false;
+    bool bGoogleDeathTestChildProcess = false;
     std::vector<std::string> GoogleTestArguments;
 };
 
@@ -156,6 +157,19 @@ bool IsOptionToken(std::string_view Value)
     return StartsWith(Value, "--");
 }
 
+bool IsGoogleDeathTestChildProcess(int Argc, char** Argv)
+{
+    for (int Index = 1; Index < Argc; ++Index)
+    {
+        if (StartsWith(Argv[Index], "--gtest_internal_run_death_test"))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 EValueParseResult ConsumeValueOption(
     int& Index,
     int Argc,
@@ -239,6 +253,7 @@ void PrintUsage()
 bool ParseArguments(int Argc, char** Argv, FRunnerOptions& OutOptions, std::string& OutError)
 {
     bool bActionSpecified = false;
+    OutOptions.bGoogleDeathTestChildProcess = IsGoogleDeathTestChildProcess(Argc, Argv);
 
     for (int Index = 1; Index < Argc; ++Index)
     {
@@ -353,6 +368,12 @@ bool ParseArguments(int Argc, char** Argv, FRunnerOptions& OutOptions, std::stri
 
         if (StartsWith(Argument, "--gtest_filter"))
         {
+            if (OutOptions.bGoogleDeathTestChildProcess)
+            {
+                OutOptions.GoogleTestArguments.emplace_back(Argument);
+                continue;
+            }
+
             OutError = "Use Enigma filters (--name, --name-prefix, --module, --tag) instead of --gtest_filter.";
             return false;
         }
@@ -735,8 +756,11 @@ int RunSelectedTests(
     (void)SelectedTests;
 #endif
 
-    const std::string GoogleFilter = BuildGoogleFilterExpression(SelectedTests);
-    FAutomationGoogleTestBridge::ApplyGoogleTestFilterExpression(GoogleFilter);
+    if (!Options.bGoogleDeathTestChildProcess)
+    {
+        const std::string GoogleFilter = BuildGoogleFilterExpression(SelectedTests);
+        FAutomationGoogleTestBridge::ApplyGoogleTestFilterExpression(GoogleFilter);
+    }
 
     const auto StartTime = std::chrono::steady_clock::now();
     const int GoogleExitCode = FAutomationGoogleTestBridge::RunAllTests();

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "AutomationTest/AutomationTestContext.h"
+#include "AutomationTest/AutomationTestDeathTest.h"
 #include "AutomationTest/AutomationTestFlags.h"
 #include "AutomationTest/AutomationTestMacros.h"
 #include "AutomationTest/AutomationTestRegistry.h"
