@@ -46,6 +46,8 @@ public static class PostBuildStepTest
         TestShippingNoDlls();
         TestShippingNoModulesFile();
         TestShippingTargetHasMonolithicLinkType();
+        TestHotReloadCopiesSnapshotAndPatchesManifest();
+        TestNormalBuildCleansHotReloadSnapshotsAndState();
         TestHandlesLockedFile();
 
         Console.WriteLine();
@@ -452,11 +454,93 @@ public static class PostBuildStepTest
         finally { CleanupRoot(projectRoot); }
     }
 
-    // -- Test 11: Handles locked file --------------------------
+    // -- Test 11: Hot reload keeps snapshot manifest -----------
+
+    private static void TestHotReloadCopiesSnapshotAndPatchesManifest()
+    {
+        Console.WriteLine("[Test 11] HotReload: snapshot DLL copied and .modules patched");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
+        try
+        {
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
+            var normalResult = PostBuildStep.Execute(ctx);
+            Assert(normalResult.Success, $"Initial Execute should succeed: {normalResult.ErrorDetail}");
+
+            var result = PostBuildStep.ExecuteHotReload(ctx);
+            Assert(result.Success, $"ExecuteHotReload should succeed: {result.ErrorDetail}");
+
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            string snapshotDll = Path.Combine(gameBin, "EnigmaEngine-GamePlay-0001.dll");
+            string snapshotPdb = Path.Combine(gameBin, "EnigmaEngine-GamePlay-0001.pdb");
+            Assert(File.Exists(snapshotDll), "Snapshot DLL should exist");
+            Assert(File.Exists(snapshotPdb), "Snapshot PDB should exist");
+
+            var modulesPath = Path.Combine(gameBin, "EnigmaEngine.modules");
+            var json = ParseJson(File.ReadAllText(modulesPath));
+            var gamePlayDll = json.GetProperty("Modules").GetProperty("GamePlay").GetString();
+            Assert(gamePlayDll == "EnigmaEngine-GamePlay-0001.dll",
+                $"GamePlay manifest should point to snapshot DLL, got {gamePlayDll}");
+
+            string statePath = HotReloadState.GetStateFilePath(projectRoot);
+            var state = HotReloadState.Load(statePath);
+            Assert(state.NextSuffix == 2, $"NextSuffix should be 2, got {state.NextSuffix}");
+            Assert(state.OriginalToVersioned["EnigmaEngine-GamePlay.dll"] == "EnigmaEngine-GamePlay-0001.dll",
+                "State should track GamePlay snapshot");
+            Console.WriteLine("  PASSED");
+        }
+        finally { CleanupRoot(projectRoot); }
+    }
+
+    // -- Test 12: Normal build resets hot reload state ---------
+
+    private static void TestNormalBuildCleansHotReloadSnapshotsAndState()
+    {
+        Console.WriteLine("[Test 12] Development: normal build cleans snapshots and restores manifest");
+        var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
+        try
+        {
+            var ctx = MakeContext(buildDir, projectRoot, engineRoot);
+            var initialResult = PostBuildStep.Execute(ctx);
+            Assert(initialResult.Success, $"Initial Execute should succeed: {initialResult.ErrorDetail}");
+
+            string gameBin = Path.Combine(projectRoot, "Binaries", "Win64");
+            string snapshotDll = Path.Combine(gameBin, "EnigmaEngine-GamePlay-0006.dll");
+            string snapshotPdb = Path.Combine(gameBin, "EnigmaEngine-GamePlay-0006.pdb");
+            CreateFakeFile(gameBin, "EnigmaEngine-GamePlay-0006.dll");
+            CreateFakeFile(gameBin, "EnigmaEngine-GamePlay-0006.pdb");
+
+            string statePath = HotReloadState.GetStateFilePath(projectRoot);
+            var state = new HotReloadState { NextSuffix = 7 };
+            state.OriginalToVersioned["EnigmaEngine-GamePlay.dll"] = "EnigmaEngine-GamePlay-0006.dll";
+            HotReloadState.Save(state, statePath);
+
+            var modulesPath = Path.Combine(gameBin, "EnigmaEngine.modules");
+            File.WriteAllText(
+                modulesPath,
+                File.ReadAllText(modulesPath)
+                    .Replace("EnigmaEngine-GamePlay.dll", "EnigmaEngine-GamePlay-0006.dll"));
+
+            var result = PostBuildStep.Execute(ctx);
+            Assert(result.Success, $"Execute should succeed: {result.ErrorDetail}");
+
+            Assert(!File.Exists(snapshotDll), "Snapshot DLL should be removed");
+            Assert(!File.Exists(snapshotPdb), "Snapshot PDB should be removed");
+            Assert(!File.Exists(statePath), "HotReload.state should be reset");
+
+            var json = ParseJson(File.ReadAllText(modulesPath));
+            var gamePlayDll = json.GetProperty("Modules").GetProperty("GamePlay").GetString();
+            Assert(gamePlayDll == "EnigmaEngine-GamePlay.dll",
+                $"GamePlay manifest should point to canonical DLL, got {gamePlayDll}");
+            Console.WriteLine("  PASSED");
+        }
+        finally { CleanupRoot(projectRoot); }
+    }
+
+    // -- Test 13: Handles locked file --------------------------
 
     private static void TestHandlesLockedFile()
     {
-        Console.WriteLine("[Test 11] Locked file: returns clear error message");
+        Console.WriteLine("[Test 13] Locked file: returns clear error message");
         var (buildDir, projectRoot, engineRoot) = SetupTempDirs();
         try
         {

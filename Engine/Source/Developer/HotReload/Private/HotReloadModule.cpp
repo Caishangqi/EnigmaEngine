@@ -86,7 +86,6 @@ private:
     bool Tick(float DeltaTime);
     void OnBinariesChanged(const std::vector<FFileChangeData>& Changes);
     void RefreshWatchedDirectories();
-    void CleanStaleHotReloadFiles();
     bool DoReloadModule(const std::string& InModuleName,
                         const std::string& VersionedDllPath);
 
@@ -131,25 +130,7 @@ void FHotReloadModule::StartupModule()
     // before we try to register callbacks with it.
     FModuleManager::Get().LoadModule("DirectoryWatcher");
 
-    // Clean versioned DLLs/PDBs left over from previous hot-reload sessions.
-    // At startup no old DLLs are loaded, so they can be safely deleted.
-    CleanStaleHotReloadFiles();
-
     RefreshWatchedDirectories();
-
-    // [TEST] Register callback to recreate GameInstance after hot-reload.
-    // Without an Editor, existing object instances have stale vtables after
-    // module reload. This workaround destroys and recreates the GameInstance
-    // so the new DLL's code takes effect. Remove when Editor exists.
-    ModuleReloadedDelegate.Add([](std::string_view ModuleName)
-    {
-        if (!GEngine) return;
-
-        auto* GameEngine = dynamic_cast<FGameEngine*>(GEngine);
-        if (!GameEngine || !GameEngine->GetGameInstance()) return;
-
-        GameEngine->RecreateGameInstance();
-    });
 
     ENIGMA_LOG(LogHotReload, Info, "HotReload module started (enabled={})",
         bEnabled ? "true" : "false");
@@ -216,55 +197,6 @@ void FHotReloadModule::RefreshWatchedDirectories()
             WatchHandles.emplace_back(SearchPath, Handle);
             ENIGMA_LOG(LogHotReload, Info, "Watching: {}", SearchPath);
         }
-    }
-}
-
-// ---------------------------------------------------------------
-// CleanStaleHotReloadFiles -- remove old versioned DLLs/PDBs
-// ---------------------------------------------------------------
-
-void FHotReloadModule::CleanStaleHotReloadFiles()
-{
-    namespace fs = std::filesystem;
-
-    auto& ModMgr = FModuleManager::Get();
-    const auto& SearchPaths = ModMgr.GetDllSearchPaths();
-
-    int Removed = 0;
-    for (const auto& Dir : SearchPaths)
-    {
-        if (!fs::exists(Dir) || !fs::is_directory(Dir))
-            continue;
-
-        std::error_code EC;
-        for (const auto& Entry : fs::directory_iterator(Dir, EC))
-        {
-            if (!Entry.is_regular_file()) continue;
-
-            auto Ext = Entry.path().extension().string();
-            if (Ext != ".dll" && Ext != ".pdb") continue;
-
-            std::string Stem = Entry.path().stem().string();
-            if (!HasHotReloadSuffix(Stem)) continue;
-
-            std::error_code RemoveEC;
-            if (fs::remove(Entry.path(), RemoveEC))
-            {
-                ++Removed;
-            }
-            else if (RemoveEC)
-            {
-                ENIGMA_LOG(LogHotReload, Warning,
-                    "Could not remove stale {}: {}",
-                    Entry.path().filename().string(), RemoveEC.message());
-            }
-        }
-    }
-
-    if (Removed > 0)
-    {
-        ENIGMA_LOG(LogHotReload, Info,
-            "Cleaned {} stale hot-reload artifact(s)", Removed);
     }
 }
 
@@ -493,6 +425,19 @@ bool FHotReloadModule::DoReloadModule(
         return false;
     }
 
+    bool bReloadsGameModule = Module->IsGameModule();
+    FGameEngine* GameEngineForReload = dynamic_cast<FGameEngine*>(GEngine);
+    bool bHadGameInstance = GameEngineForReload && GameEngineForReload->GetGameInstance();
+    if (bHadGameInstance)
+    {
+        GameEngineForReload->PrepareGameInstanceForHotReload();
+    }
+
+    if (bReloadsGameModule)
+    {
+        FGameEngine::ClearGameInstanceFactory();
+    }
+
     // Step 1: Unload old module (ShutdownModule + FreeLibrary).
     if (!ModMgr.UnloadModule(InModuleName))
     {
@@ -503,26 +448,20 @@ bool FHotReloadModule::DoReloadModule(
         return false;
     }
 
-    // Step 2: Load the new versioned DLL into the process.
-    void* NewHandle = FModuleManager::LoadDllFromPath(VersionedDllPath.c_str());
-    if (!NewHandle)
+    // Step 2: Load and initialize the snapshot DLL while tracking its handle/path.
+    auto* NewModule = ModMgr.LoadModuleFromPath(InModuleName, VersionedDllPath);
+    if (!NewModule)
     {
-        std::string Err = "Failed to load versioned DLL: " + VersionedDllPath;
+        std::string Err = "Failed to load snapshot DLL: " + VersionedDllPath;
         ENIGMA_LOG(LogHotReload, Error, "Reload '{}' failed: {}", InModuleName, Err);
         ReloadFailedDelegate.Broadcast(
             std::string_view(InModuleName), std::string_view(Err));
         return false;
     }
 
-    // Step 3: Initialize the module (finds new FModuleInitializerEntry, calls StartupModule).
-    auto* NewModule = ModMgr.LoadModule(InModuleName);
-    if (!NewModule)
+    if (bHadGameInstance)
     {
-        std::string Err = "Failed to initialize module after DLL load";
-        ENIGMA_LOG(LogHotReload, Error, "Reload '{}' failed: {}", InModuleName, Err);
-        ReloadFailedDelegate.Broadcast(
-            std::string_view(InModuleName), std::string_view(Err));
-        return false;
+        GameEngineForReload->RecreateGameInstance();
     }
 
     ENIGMA_LOG(LogHotReload, Info, "Module '{}' reloaded successfully from '{}'",

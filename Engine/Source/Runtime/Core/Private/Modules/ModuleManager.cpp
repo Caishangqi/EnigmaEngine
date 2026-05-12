@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fstream>
 #include <string>
+#include <utility>
 
 // Platform DLL loading
 #ifdef _WIN32
@@ -181,6 +182,14 @@ IModuleInterface* FModuleManager::LoadModule(std::string_view name)
             }
         }
 
+        auto PendingIt = PendingModuleDlls.find(key);
+        if (PendingIt != PendingModuleDlls.end())
+        {
+            dllHandle = PendingIt->second.DllHandle;
+            dllFilePath = std::move(PendingIt->second.DllFilePath);
+            PendingModuleDlls.erase(PendingIt);
+        }
+
         // Step 3: Create the module instance.
         rawModule = initFn();
         if (!rawModule)
@@ -205,6 +214,74 @@ IModuleInterface* FModuleManager::LoadModule(std::string_view name)
 
     // Step 5: Call StartupModule WITHOUT holding the lock (matching UE pattern).
     // This allows StartupModule to call LoadModule/IsModuleLoaded without deadlock.
+    rawModule->StartupModule();
+
+    return rawModule;
+}
+
+// ---------------------------------------------------------------
+// LoadModuleFromPath
+// ---------------------------------------------------------------
+IModuleInterface* FModuleManager::LoadModuleFromPath(
+    std::string_view name,
+    const std::string& dllPath)
+{
+    std::string key(name);
+    IModuleInterface* rawModule = nullptr;
+    void* dllHandle = nullptr;
+
+    {
+        std::lock_guard<std::mutex> lock(Mutex);
+
+        auto it = Modules.find(key);
+        if (it != Modules.end() && it->second.Module)
+        {
+            return it->second.Module.get();
+        }
+
+        dllHandle = PlatformLoadDll(dllPath.c_str());
+        if (!dllHandle)
+        {
+#ifdef _WIN32
+            DWORD err = ::GetLastError();
+            ENIGMA_LOG(LogModuleManager, Error,
+                "Failed to load DLL '{}' (GetLastError={})", dllPath, err);
+#else
+            ENIGMA_LOG(LogModuleManager, Error, "Failed to load DLL '{}'", dllPath);
+#endif
+            return nullptr;
+        }
+
+        FInitializeModuleFunctionPtr initFn =
+            FModuleInitializerEntry::FindModule(key.c_str());
+        if (!initFn)
+        {
+            ENIGMA_LOG(LogModuleManager, Error,
+                "Module '{}' loaded from '{}' but no initializer found",
+                key, dllPath);
+            PlatformFreeDll(dllHandle);
+            return nullptr;
+        }
+
+        rawModule = initFn();
+        if (!rawModule)
+        {
+            ENIGMA_LOG(LogModuleManager, Error, "Initializer for '{}' returned null", key);
+            PlatformFreeDll(dllHandle);
+            return nullptr;
+        }
+
+        FModuleInfo info;
+        info.Name        = key;
+        info.DllHandle   = dllHandle;
+        info.Module      = std::unique_ptr<IModuleInterface>(rawModule);
+        info.LoadOrder   = NextLoadOrder++;
+        info.DllFilePath = dllPath;
+
+        PendingModuleDlls.erase(key);
+        Modules.emplace(key, std::move(info));
+    }
+
     rawModule->StartupModule();
 
     return rawModule;
@@ -261,11 +338,11 @@ void FModuleManager::ScanDllsFromDirectory(const std::string& directory)
         {
             ENIGMA_LOG(LogModuleManager, Info, "Loading modules from manifest: {}", manifestPath);
 
-            // Simple line-by-line parsing: extract "xxx.dll" values
+            // Simple line-by-line parsing: extract module-to-DLL entries
             // from the JSON without a full JSON parser.
             // Format: "ModuleName": "SomeFile.dll"
             std::string line;
-            std::vector<std::string> dllNames;
+            std::vector<std::pair<std::string, std::string>> manifestModules;
             while (std::getline(manifestFile, line))
             {
                 // Look for lines containing .dll"
@@ -282,15 +359,29 @@ void FModuleManager::ScanDllsFromDirectory(const std::string& directory)
                     continue;
 
                 std::string dllName = line.substr(valueStart + 1, valueEnd - valueStart - 1);
-                if (!dllName.empty())
+
+                auto colon = line.rfind(':', valueStart);
+                if (colon == std::string::npos || colon == 0)
+                    continue;
+
+                auto keyEnd = line.rfind('"', colon);
+                if (keyEnd == std::string::npos || keyEnd == 0)
+                    continue;
+
+                auto keyStart = line.rfind('"', keyEnd - 1);
+                if (keyStart == std::string::npos)
+                    continue;
+
+                std::string moduleName = line.substr(keyStart + 1, keyEnd - keyStart - 1);
+                if (!moduleName.empty() && !dllName.empty())
                 {
-                    dllNames.push_back(dllName);
+                    manifestModules.emplace_back(std::move(moduleName), std::move(dllName));
                 }
             }
             manifestFile.close();
 
             // Load only the DLLs listed in the manifest
-            for (const auto& dllName : dllNames)
+            for (const auto& [moduleName, dllName] : manifestModules)
             {
                 std::string fullPath = directory;
                 if (!fullPath.empty() && fullPath.back() != '\\' && fullPath.back() != '/')
@@ -303,6 +394,11 @@ void FModuleManager::ScanDllsFromDirectory(const std::string& directory)
                     DWORD err = ::GetLastError();
                     ENIGMA_LOG(LogModuleManager, Warning,
                         "Could not load DLL '{}' (GetLastError={})", fullPath, err);
+                }
+                else
+                {
+                    std::lock_guard<std::mutex> lock(Mutex);
+                    PendingModuleDlls[moduleName] = { handle, fullPath };
                 }
             }
 
@@ -442,6 +538,16 @@ void FModuleManager::UnloadAllModules()
     }
 
     Modules.clear();
+
+    for (auto& [_, Pending] : PendingModuleDlls)
+    {
+        if (Pending.DllHandle)
+        {
+            PlatformFreeDll(Pending.DllHandle);
+            Pending.DllHandle = nullptr;
+        }
+    }
+    PendingModuleDlls.clear();
 }
 
 // ---------------------------------------------------------------

@@ -1,6 +1,6 @@
 // Copyright EnigmaEngine. All Rights Reserved.
 // HotReload.Tests -- Unit tests for HotReload module logic.
-// Tests shadow copy file operations, debounce, and event broadcasting.
+// Tests snapshot file operations, debounce, and event broadcasting.
 
 #include "IHotReload.h"
 #include "Delegates/MulticastDelegate.h"
@@ -26,6 +26,7 @@
         ::Enigma::EAutomationTestFlags::None)
 
 #include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -35,9 +36,9 @@ using namespace Enigma;
 namespace fs = std::filesystem;
 
 // ---------------------------------------------------------------
-// Test fixture for shadow copy file operations.
+// Test fixture for snapshot file operations.
 // ---------------------------------------------------------------
-class HotReloadShadowCopyTest : public ::Enigma::FAutomationTestFixture
+class HotReloadSnapshotTest : public ::Enigma::FAutomationTestFixture
 {
 protected:
     void SetUp() override
@@ -70,99 +71,102 @@ protected:
         return PdbPath;
     }
 
+    static std::string MakeSnapshotName(
+        const std::string& BaseStem,
+        int Suffix,
+        const char* Extension)
+    {
+        char Buffer[16] = {};
+        std::snprintf(Buffer, sizeof(Buffer), "-%04d%s", Suffix, Extension);
+        return BaseStem + Buffer;
+    }
+
     fs::path TempDir;
 };
 
 // ---------------------------------------------------------------
-// ShadowCopy_CreateAndCleanup: verify file copy with versioned name.
+// Snapshot_CreateAndCleanup: verify file copy with snapshot name.
 // ---------------------------------------------------------------
-ENIGMA_IMPLEMENT_HOT_RELOAD_AUTOMATION_TEST_F(HotReloadShadowCopyTest, ShadowCopy_CreateAndCleanup)
+ENIGMA_IMPLEMENT_HOT_RELOAD_AUTOMATION_TEST_F(HotReloadSnapshotTest, Snapshot_CreateAndCleanup)
 {
     auto DllPath = CreateFakeDll("EnigmaEngine-TestModule");
 
-    // Simulate shadow copy: copy to {Module}-Live-{Version}.dll
-    std::string ModuleName = "TestModule";
-    int Version = 1;
-    std::string ShadowName = ModuleName + "-Live-" + std::to_string(Version) + ".dll";
-    fs::path ShadowPath = TempDir / ShadowName;
+    std::string SnapshotName = MakeSnapshotName("EnigmaEngine-TestModule", 1, ".dll");
+    fs::path SnapshotPath = TempDir / SnapshotName;
 
     std::error_code Ec;
-    fs::copy_file(DllPath, ShadowPath, fs::copy_options::overwrite_existing, Ec);
+    fs::copy_file(DllPath, SnapshotPath, fs::copy_options::overwrite_existing, Ec);
     if (!TestFalse("ASSERT_FALSE", Ec)) { return; }
-    TestTrue("EXPECT_TRUE", fs::exists(ShadowPath));
+    TestTrue("EXPECT_TRUE", fs::exists(SnapshotPath));
 
     // Verify content matches.
     {
-        std::ifstream In(ShadowPath, std::ios::binary);
+        std::ifstream In(SnapshotPath, std::ios::binary);
         std::string Content((std::istreambuf_iterator<char>(In)),
                              std::istreambuf_iterator<char>());
         TestTrue("EXPECT_TRUE", Content.find("FAKE_DLL_CONTENT") != std::string::npos);
     }
 
     // Cleanup.
-    fs::remove(ShadowPath, Ec);
-    TestFalse("EXPECT_FALSE", fs::exists(ShadowPath));
+    fs::remove(SnapshotPath, Ec);
+    TestFalse("EXPECT_FALSE", fs::exists(SnapshotPath));
 }
 
 // ---------------------------------------------------------------
-// ShadowCopy_PdbCopiedAlongside: verify PDB is copied too.
+// Snapshot_PdbCopiedAlongside: verify PDB is copied too.
 // ---------------------------------------------------------------
-ENIGMA_IMPLEMENT_HOT_RELOAD_AUTOMATION_TEST_F(HotReloadShadowCopyTest, ShadowCopy_PdbCopiedAlongside)
+ENIGMA_IMPLEMENT_HOT_RELOAD_AUTOMATION_TEST_F(HotReloadSnapshotTest, Snapshot_PdbCopiedAlongside)
 {
     auto DllPath = CreateFakeDll("EnigmaEngine-TestModule");
     auto PdbPath = CreateFakePdb("EnigmaEngine-TestModule");
 
-    std::string ModuleName = "TestModule";
-    int Version = 1;
-
-    fs::path ShadowDll = TempDir / (ModuleName + "-Live-" + std::to_string(Version) + ".dll");
-    fs::path ShadowPdb = TempDir / (ModuleName + "-Live-" + std::to_string(Version) + ".pdb");
+    fs::path SnapshotDll = TempDir / MakeSnapshotName("EnigmaEngine-TestModule", 1, ".dll");
+    fs::path SnapshotPdb = TempDir / MakeSnapshotName("EnigmaEngine-TestModule", 1, ".pdb");
 
     std::error_code Ec;
-    fs::copy_file(DllPath, ShadowDll, fs::copy_options::overwrite_existing, Ec);
+    fs::copy_file(DllPath, SnapshotDll, fs::copy_options::overwrite_existing, Ec);
     if (!TestFalse("ASSERT_FALSE", Ec)) { return; }
 
     // Copy PDB if exists (matching HotReload logic).
     if (fs::exists(PdbPath))
     {
-        fs::copy_file(PdbPath, ShadowPdb, fs::copy_options::overwrite_existing, Ec);
+        fs::copy_file(PdbPath, SnapshotPdb, fs::copy_options::overwrite_existing, Ec);
     }
 
-    TestTrue("EXPECT_TRUE", fs::exists(ShadowDll));
-    TestTrue("EXPECT_TRUE", fs::exists(ShadowPdb));
+    TestTrue("EXPECT_TRUE", fs::exists(SnapshotDll));
+    TestTrue("EXPECT_TRUE", fs::exists(SnapshotPdb));
 
     // Cleanup both.
-    fs::remove(ShadowDll, Ec);
-    fs::remove(ShadowPdb, Ec);
-    TestFalse("EXPECT_FALSE", fs::exists(ShadowDll));
-    TestFalse("EXPECT_FALSE", fs::exists(ShadowPdb));
+    fs::remove(SnapshotDll, Ec);
+    fs::remove(SnapshotPdb, Ec);
+    TestFalse("EXPECT_FALSE", fs::exists(SnapshotDll));
+    TestFalse("EXPECT_FALSE", fs::exists(SnapshotPdb));
 }
 
 // ---------------------------------------------------------------
-// ShadowCopy_VersionIncrement: multiple copies get unique names.
+// Snapshot_VersionIncrement: multiple copies get unique names.
 // ---------------------------------------------------------------
-ENIGMA_IMPLEMENT_HOT_RELOAD_AUTOMATION_TEST_F(HotReloadShadowCopyTest, ShadowCopy_VersionIncrement)
+ENIGMA_IMPLEMENT_HOT_RELOAD_AUTOMATION_TEST_F(HotReloadSnapshotTest, Snapshot_VersionIncrement)
 {
     auto DllPath = CreateFakeDll("EnigmaEngine-TestModule");
-    std::string ModuleName = "TestModule";
+    std::string BaseStem = "EnigmaEngine-TestModule";
 
     std::error_code Ec;
-    for (int Version = 1; Version <= 3; ++Version)
+    for (int Suffix = 1; Suffix <= 3; ++Suffix)
     {
-        std::string ShadowName = ModuleName + "-Live-"
-            + std::to_string(Version) + ".dll";
-        fs::path ShadowPath = TempDir / ShadowName;
+        std::string SnapshotName = MakeSnapshotName(BaseStem, Suffix, ".dll");
+        fs::path SnapshotPath = TempDir / SnapshotName;
 
-        fs::copy_file(DllPath, ShadowPath,
+        fs::copy_file(DllPath, SnapshotPath,
             fs::copy_options::overwrite_existing, Ec);
         if (!TestFalse("ASSERT_FALSE", Ec)) { return; }
-        TestTrue("EXPECT_TRUE", fs::exists(ShadowPath));
+        TestTrue("EXPECT_TRUE", fs::exists(SnapshotPath));
     }
 
     // All three versions should exist.
-    TestTrue("EXPECT_TRUE", fs::exists(TempDir / "TestModule-Live-1.dll"));
-    TestTrue("EXPECT_TRUE", fs::exists(TempDir / "TestModule-Live-2.dll"));
-    TestTrue("EXPECT_TRUE", fs::exists(TempDir / "TestModule-Live-3.dll"));
+    TestTrue("EXPECT_TRUE", fs::exists(TempDir / "EnigmaEngine-TestModule-0001.dll"));
+    TestTrue("EXPECT_TRUE", fs::exists(TempDir / "EnigmaEngine-TestModule-0002.dll"));
+    TestTrue("EXPECT_TRUE", fs::exists(TempDir / "EnigmaEngine-TestModule-0003.dll"));
 }
 
 // ---------------------------------------------------------------

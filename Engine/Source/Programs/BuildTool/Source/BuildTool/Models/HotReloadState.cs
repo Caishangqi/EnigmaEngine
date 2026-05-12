@@ -1,4 +1,4 @@
-// HotReloadState.cs -- Tracks hot-reload version counter and DLL mappings.
+// HotReloadState.cs -- Tracks hot-reload suffix counter and snapshot DLL mappings.
 // Persisted to {ProjectRoot}/Intermediate/HotReload/HotReload.state as JSON.
 // Matches UE's HotReload.state pattern.
 
@@ -8,16 +8,16 @@ using System.Text.Json.Serialization;
 namespace BuildTool.Models;
 
 /// <summary>
-/// Tracks hot-reload build state: version suffix counter and
-/// original-to-versioned DLL filename mappings.
+/// Tracks hot-reload build state: snapshot suffix counter and
+/// original-to-snapshot DLL filename mappings.
 /// </summary>
 public class HotReloadState
 {
-    /// <summary>Next suffix to use (starts at 1, incremented each hot-reload build).</summary>
+    /// <summary>Next snapshot suffix to use (starts at 1, incremented each hot-reload build).</summary>
     [JsonPropertyName("NextSuffix")]
     public int NextSuffix { get; set; } = 1;
 
-    /// <summary>Maps original DLL filename to its current versioned filename.</summary>
+    /// <summary>Maps original DLL filename to its current snapshot DLL filename.</summary>
     [JsonPropertyName("OriginalToVersioned")]
     public Dictionary<string, string> OriginalToVersioned { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

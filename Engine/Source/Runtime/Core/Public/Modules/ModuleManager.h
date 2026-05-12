@@ -58,6 +58,10 @@ public:
     /// On failure returns nullptr and logs an error.
     IModuleInterface* LoadModule(std::string_view name);
 
+    /// Load a module by name from an explicit DLL path.
+    /// Used by hot reload to initialize a snapshot DLL and keep its handle/path tracked.
+    IModuleInterface* LoadModuleFromPath(std::string_view name, const std::string& dllPath);
+
     /// Discover and load all modules whose DLLs are already loaded
     /// (implicitly linked) but not yet initialized via LoadModule().
     /// Calls StartupModule() on each newly loaded module.
@@ -126,6 +130,12 @@ private:
     FModuleManager() = default;
     ~FModuleManager();
 
+    struct FPendingModuleDll
+    {
+        void*       DllHandle = nullptr;
+        std::string DllFilePath;
+    };
+
     // Platform DLL helpers
     static void*  PlatformLoadDll(const char* path);
     static void   PlatformFreeDll(void* handle);
@@ -133,6 +143,7 @@ private:
 
     mutable std::mutex                              Mutex;
     std::unordered_map<std::string, FModuleInfo>    Modules;
+    std::unordered_map<std::string, FPendingModuleDll> PendingModuleDlls;
     std::vector<std::string>                        DllSearchPaths;
     std::string                                     TargetName;
     int32_t                                         NextLoadOrder = 0;

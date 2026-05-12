@@ -5,8 +5,16 @@
 #include "Modules/ModuleManager.h"
 #include "Modules/ModuleInterface.h"
 
-#include <cstdio>
 #include <cassert>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <string>
+
+#ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+#endif
 
 static int g_passed = 0;
 static int g_failed = 0;
@@ -15,6 +23,20 @@ static void Assert(bool cond, const char* msg)
 {
     if (cond) { std::printf("  PASSED: %s\n", msg); ++g_passed; }
     else      { std::printf("  FAILED: %s\n", msg); ++g_failed; }
+}
+
+static std::filesystem::path GetExecutableDirectory()
+{
+#ifdef _WIN32
+    char buffer[MAX_PATH] = {};
+    DWORD length = ::GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+    if (length > 0)
+    {
+        return std::filesystem::path(buffer).parent_path();
+    }
+#endif
+
+    return std::filesystem::current_path();
 }
 
 int main()
@@ -115,8 +137,43 @@ int main()
             "TestGameModule unloaded after UnloadAllModules");
     }
 
-    // -- Test 9: Load non-existent module --
-    std::printf("\n[Test 9] Load non-existent module\n");
+    // -- Test 9: Manifest scan records DLL path --
+    std::printf("\n[Test 9] Manifest scan records DLL path\n");
+    {
+        auto exeDir = GetExecutableDirectory();
+        auto manifestPath = exeDir / "SnapshotTarget.modules";
+
+        {
+            std::ofstream manifest(manifestPath);
+            manifest
+                << "{\n"
+                << "  \"BuildId\": \"TEST\",\n"
+                << "  \"Modules\": {\n"
+                << "    \"TestModule\": \"TestModule.dll\"\n"
+                << "  }\n"
+                << "}\n";
+        }
+
+        mgr.SetTargetName("SnapshotTarget");
+        mgr.ScanDllsFromDirectory(exeDir.string());
+        mgr.LoadAllRegisteredModules();
+
+        Assert(mgr.IsModuleLoaded("TestModule"),
+            "TestModule loaded from .modules manifest");
+
+        std::string dllPath = mgr.GetModuleDllPath("TestModule");
+        Assert(!dllPath.empty(),
+            "GetModuleDllPath returns manifest DLL path");
+        Assert(std::filesystem::path(dllPath).filename().string() == "TestModule.dll",
+            "GetModuleDllPath keeps the manifest-selected DLL filename");
+
+        mgr.UnloadAllModules();
+        std::error_code ec;
+        std::filesystem::remove(manifestPath, ec);
+    }
+
+    // -- Test 10: Load non-existent module --
+    std::printf("\n[Test 10] Load non-existent module\n");
     {
         auto* mod = mgr.LoadModule("NonExistentModule");
         Assert(mod == nullptr,

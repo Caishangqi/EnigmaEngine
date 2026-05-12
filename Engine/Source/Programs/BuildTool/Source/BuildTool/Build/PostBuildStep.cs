@@ -2,6 +2,7 @@
 
 namespace BuildTool.Build;
 
+using System.Text.Json;
 using BuildTool.Generators;
 using BuildTool.Models;
 using BuildTool.Scanners;
@@ -132,9 +133,9 @@ public static class PostBuildStep
     }
 
     /// <summary>
-    /// Execute hot-reload post-build: copy game/plugin DLLs with versioned names.
+    /// Execute hot-reload post-build: copy game/plugin DLLs with snapshot names.
     /// Does NOT overwrite original DLLs (they are locked by the running engine).
-    /// Does NOT regenerate manifests (engine does not re-read them during hot reload).
+    /// Updates .modules manifests so the next editor launch keeps using the latest snapshot.
     /// </summary>
     public static BuildResult ExecuteHotReload(PostBuildContext context)
     {
@@ -158,13 +159,14 @@ public static class PostBuildStep
             var fileOutputMap = BuildOutputDirectoryMap(scan, projectName, config, platform);
 
             // Collect hot-reloadable module DLL names (game + project plugins only).
-            var hotReloadDlls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var hotReloadDlls = new Dictionary<string, (string ModuleName, string OutputDir)>(
+                StringComparer.OrdinalIgnoreCase);
 
             foreach (var (name, _) in scan.GameModules)
             {
                 var dllName = ManifestGenerator.GetDllFileName(projectName, name, config, platform);
                 if (fileOutputMap.TryGetValue(dllName, out var outputDir))
-                    hotReloadDlls[dllName] = outputDir;
+                    hotReloadDlls[dllName] = (name, outputDir);
             }
 
             foreach (var (pluginName, descriptor) in scan.PluginScanResult.EnabledPlugins)
@@ -180,7 +182,7 @@ public static class PostBuildStep
                 {
                     var dllName = ManifestGenerator.GetDllFileName(projectName, moduleDesc.Name, config, platform);
                     if (fileOutputMap.TryGetValue(dllName, out var outputDir))
-                        hotReloadDlls[dllName] = outputDir;
+                        hotReloadDlls[dllName] = (moduleDesc.Name, outputDir);
                 }
             }
 
@@ -191,8 +193,11 @@ public static class PostBuildStep
 
             // Copy versioned DLLs and PDBs.
             int copied = 0;
-            foreach (var (originalDllName, outputDir) in hotReloadDlls)
+            int manifestsUpdated = 0;
+            string manifestName = ManifestGenerator.GetManifestBaseName(projectName, config, platform) + ".modules";
+            foreach (var (originalDllName, hotReloadBinary) in hotReloadDlls)
             {
+                var (moduleName, outputDir) = hotReloadBinary;
                 Directory.CreateDirectory(outputDir);
 
                 // Find the built DLL in CMake output.
@@ -229,6 +234,8 @@ public static class PostBuildStep
                 }
 
                 state.OriginalToVersioned[originalDllName] = versionedDllName;
+                if (UpdateHotReloadManifest(outputDir, manifestName, moduleName, versionedDllName))
+                    manifestsUpdated++;
             }
 
             // Save updated state.
@@ -236,7 +243,8 @@ public static class PostBuildStep
             HotReloadState.Save(state, statePath);
             Console.WriteLine($"[PostBuild] State saved (next suffix: {state.NextSuffix:D4})");
 
-            return BuildResult.Ok($"Hot-reload completed: {copied} file(s) with suffix -{suffix:D4}");
+            return BuildResult.Ok(
+                $"Hot-reload completed: {copied} file(s), {manifestsUpdated} manifest update(s) with suffix -{suffix:D4}");
         }
         catch (IOException ex)
         {
@@ -246,6 +254,39 @@ public static class PostBuildStep
         {
             return BuildResult.Fail("Hot-reload post-build failed", ex.Message);
         }
+    }
+
+    private static bool UpdateHotReloadManifest(
+        string outputDir,
+        string manifestName,
+        string moduleName,
+        string snapshotDllName)
+    {
+        string manifestPath = Path.Combine(outputDir, manifestName);
+        if (!File.Exists(manifestPath))
+            throw new FileNotFoundException(
+                $"Hot-reload manifest not found for module '{moduleName}'", manifestPath);
+
+        var manifest = JsonSerializer.Deserialize<ModulesManifestPatch>(
+            File.ReadAllText(manifestPath)) ?? new ModulesManifestPatch();
+
+        if (!manifest.Modules.ContainsKey(moduleName))
+            throw new InvalidOperationException(
+                $"Hot-reload manifest '{manifestPath}' does not contain module '{moduleName}'");
+
+        manifest.Modules[moduleName] = snapshotDllName;
+        manifest.Modules = new SortedDictionary<string, string>(
+            manifest.Modules,
+            StringComparer.Ordinal);
+
+        var options = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = null,
+        };
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, options));
+        Console.WriteLine($"  [HotReload] Manifest {manifestName}: {moduleName} -> {snapshotDllName}");
+        return true;
     }
 
     /// <summary>
@@ -610,5 +651,11 @@ public static class PostBuildStep
             linkType: linkType,
             engineModuleNames: engineModuleNames,
             enginePluginNames: enginePluginNames);
+    }
+
+    private sealed class ModulesManifestPatch
+    {
+        public string BuildId { get; init; } = string.Empty;
+        public SortedDictionary<string, string> Modules { get; set; } = new(StringComparer.Ordinal);
     }
 }

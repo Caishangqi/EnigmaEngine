@@ -14,7 +14,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 
@@ -132,7 +131,7 @@ ParseEProject(const std::filesystem::path& projectRoot)
         }
     }
 
-    // Extract Plugins[] — only enabled ones
+    // Extract Plugins[] - only enabled ones
     if (doc.contains("Plugins") && doc["Plugins"].is_array())
     {
         for (const auto& p : doc["Plugins"])
@@ -260,126 +259,6 @@ DiscoverPlugins(
     }
 
     return result;
-}
-
-// ---------------------------------------------------------------
-// Hot-reload DLL promotion (matching UE's startup behavior)
-//
-// After a force-terminate, versioned DLLs (-0001, -0002...) remain
-// in Binaries/ but the originals are stale (from the last normal build).
-// Promote the highest-versioned DLL over the original so the next
-// module load picks up the latest code.
-// ---------------------------------------------------------------
-
-static bool HasHotReloadSuffix(const std::string& Stem)
-{
-    if (Stem.size() < 5) return false;
-    if (Stem[Stem.size() - 5] != '-') return false;
-    for (int i = 1; i <= 4; ++i)
-    {
-        if (!std::isdigit(static_cast<unsigned char>(Stem[Stem.size() - i])))
-            return false;
-    }
-    return true;
-}
-
-static std::string StripHotReloadSuffix(const std::string& Stem)
-{
-    if (!HasHotReloadSuffix(Stem)) return Stem;
-    return Stem.substr(0, Stem.size() - 5);
-}
-
-static int ExtractHotReloadSuffix(const std::string& Stem)
-{
-    if (!HasHotReloadSuffix(Stem)) return -1;
-    return std::stoi(Stem.substr(Stem.size() - 4));
-}
-
-static void PromoteHotReloadDlls()
-{
-    namespace fs = std::filesystem;
-
-    const auto& SearchPaths = FModuleManager::Get().GetDllSearchPaths();
-    int Promoted = 0;
-    int Cleaned  = 0;
-
-    for (const auto& Dir : SearchPaths)
-    {
-        if (!fs::exists(Dir) || !fs::is_directory(Dir))
-            continue;
-
-        // Pass 1: find the highest-versioned DLL for each base name.
-        struct FVersionInfo { int Suffix; fs::path Path; };
-        std::unordered_map<std::string, FVersionInfo> BestVersions;
-
-        std::error_code EC;
-        for (const auto& Entry : fs::directory_iterator(Dir, EC))
-        {
-            if (!Entry.is_regular_file()) continue;
-            if (Entry.path().extension() != ".dll") continue;
-
-            std::string Stem = Entry.path().stem().string();
-            if (!HasHotReloadSuffix(Stem)) continue;
-
-            int Suffix = ExtractHotReloadSuffix(Stem);
-            std::string BaseStem = StripHotReloadSuffix(Stem);
-
-            auto It = BestVersions.find(BaseStem);
-            if (It == BestVersions.end() || Suffix > It->second.Suffix)
-            {
-                BestVersions[BaseStem] = { Suffix, Entry.path() };
-            }
-        }
-
-        if (BestVersions.empty()) continue;
-
-        // Pass 2: promote highest version over original.
-        for (const auto& [BaseStem, Best] : BestVersions)
-        {
-            fs::path OrigDll = fs::path(Dir) / (BaseStem + ".dll");
-            std::error_code CopyEC;
-            fs::copy_file(Best.Path, OrigDll,
-                          fs::copy_options::overwrite_existing, CopyEC);
-            if (!CopyEC)
-            {
-                ++Promoted;
-                ENIGMA_LOG(LogInit, Info, "Promoted hot-reload DLL: {} -> {}",
-                    Best.Path.filename().string(), OrigDll.filename().string());
-            }
-
-            fs::path VersionedPdb = Best.Path;
-            VersionedPdb.replace_extension(".pdb");
-            if (fs::exists(VersionedPdb))
-            {
-                fs::path OrigPdb = OrigDll;
-                OrigPdb.replace_extension(".pdb");
-                fs::copy_file(VersionedPdb, OrigPdb,
-                              fs::copy_options::overwrite_existing, CopyEC);
-            }
-        }
-
-        // Pass 3: delete all versioned DLLs and PDBs.
-        for (const auto& Entry : fs::directory_iterator(Dir, EC))
-        {
-            if (!Entry.is_regular_file()) continue;
-            auto Ext = Entry.path().extension().string();
-            if (Ext != ".dll" && Ext != ".pdb") continue;
-
-            std::string Stem = Entry.path().stem().string();
-            if (!HasHotReloadSuffix(Stem)) continue;
-
-            std::error_code RemoveEC;
-            if (fs::remove(Entry.path(), RemoveEC))
-                ++Cleaned;
-        }
-    }
-
-    if (Promoted > 0)
-    {
-        ENIGMA_LOG(LogInit, Info,
-            "Hot-reload promotion: {} module(s) promoted, {} artifact(s) cleaned",
-            Promoted, Cleaned);
-    }
 }
 
 // ---------------------------------------------------------------
@@ -651,7 +530,7 @@ int32_t FEngineLoop::PreInit(const char* cmdLine)
         {
             std::filesystem::path projectRoot =
                 std::filesystem::path(projectConfigDir).parent_path();
-            // engineConfigDir = {EngineRoot}/Engine/Config → parent = {EngineRoot}/Engine
+            // engineConfigDir = {EngineRoot}/Engine/Config -> parent = {EngineRoot}/Engine
             std::filesystem::path engineDir =
                 std::filesystem::path(engineConfigDir).parent_path();
 
@@ -736,15 +615,9 @@ int32_t FEngineLoop::Init()
 #endif
         if (!binDir.empty())
         {
-            // Promote versioned hot-reload DLLs over stale originals (matching UE).
-            // After a force-terminate, the originals are from the last normal build
-            // while versioned DLLs have the latest code from hot-reload sessions.
-#if !ENIGMA_BUILD_SHIPPING
-            PromoteHotReloadDlls();
-#endif
-
             // Phase 1: Scan all directories -- load DLLs into process
             //          (triggers static FModuleInitializerEntry registration)
+            // Hot-reload snapshots are selected by the .modules manifest.
             FModuleManager::Get().ScanDllsFromDirectory(binDir);
 
             for (const auto& searchPath : FModuleManager::Get().GetDllSearchPaths())
