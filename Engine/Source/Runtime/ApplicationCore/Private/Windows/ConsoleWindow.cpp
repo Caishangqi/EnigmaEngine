@@ -10,6 +10,53 @@
 namespace Enigma
 {
 
+namespace
+{
+
+HWND FindTopLevelConsoleHwnd(HWND ConsoleHwnd)
+{
+    if (ConsoleHwnd == nullptr)
+    {
+        return nullptr;
+    }
+
+    HWND Hwnd = ::GetAncestor(ConsoleHwnd, GA_ROOTOWNER);
+    if (Hwnd != nullptr)
+    {
+        return Hwnd;
+    }
+
+    Hwnd = ConsoleHwnd;
+    for (HWND Parent = ::GetParent(Hwnd);
+         Parent != nullptr;
+         Parent = ::GetParent(Hwnd))
+    {
+        Hwnd = Parent;
+    }
+    return Hwnd;
+}
+
+bool ShouldAllocateFreshConsole(HWND ConsoleHwnd)
+{
+    HWND TopLevelHwnd = FindTopLevelConsoleHwnd(ConsoleHwnd);
+    if (TopLevelHwnd == nullptr || !::IsWindow(TopLevelHwnd))
+    {
+        return true;
+    }
+
+    RECT WindowRect = {};
+    if (!::GetWindowRect(TopLevelHwnd, &WindowRect))
+    {
+        return true;
+    }
+
+    return !::IsWindowVisible(TopLevelHwnd)
+        || WindowRect.right <= WindowRect.left
+        || WindowRect.bottom <= WindowRect.top;
+}
+
+} // namespace
+
 // ---------------------------------------------------------------
 // Construction / Destruction
 // ---------------------------------------------------------------
@@ -17,12 +64,11 @@ namespace Enigma
 FConsoleWindow::FConsoleWindow(const FConsoleWindowSettings& settings)
     : m_settings(settings)
 {
-    // Acquire console HWND. If no console is attached, allocate one.
-    // If the process inherited a headless console (e.g. output redirected
-    // by a parent process), GetConsoleWindow() returns nullptr even though
-    // a console exists. In that case, detach first, then allocate fresh.
+    // Acquire a visible console HWND. IDEs and modern terminals can attach
+    // a hidden pseudo console; that is fine for stdout, but not for a game
+    // window that must resize itself.
     m_consoleHwnd = ::GetConsoleWindow();
-    if (m_consoleHwnd == nullptr)
+    if (ShouldAllocateFreshConsole(m_consoleHwnd))
     {
         ::FreeConsole();
         ::AllocConsole();
@@ -290,9 +336,9 @@ void FConsoleWindow::SetRenderFriendly(bool bEnable)
 void FConsoleWindow::ApplySettings(const FConsoleWindowSettings& settings)
 {
     m_settings = settings;
-    applyBufferSize();
-    applyFont();
     applyConsoleMode();
+    applyFont();
+    applyBufferSize();
     applyWindowStyle();
 
     if (m_settings.bRenderFriendly)
@@ -424,14 +470,7 @@ void FConsoleWindow::pumpConsoleInput(FGenericApplicationMessageHandler* handler
 
 HWND FConsoleWindow::findTopLevelHwnd() const
 {
-    HWND hwnd = m_consoleHwnd;
-    for (HWND parent = ::GetParent(hwnd);
-         parent != nullptr;
-         parent = ::GetParent(hwnd))
-    {
-        hwnd = parent;
-    }
-    return hwnd;
+    return FindTopLevelConsoleHwnd(m_consoleHwnd);
 }
 
 void FConsoleWindow::saveOriginalSettings()
@@ -462,6 +501,10 @@ void FConsoleWindow::saveOriginalSettings()
         static_assert(sizeof(COORD) <= sizeof(m_originalBufferSize),
             "COORD exceeds opaque storage");
         *reinterpret_cast<COORD*>(m_originalBufferSize) = csbi.dwSize;
+
+        static_assert(sizeof(SMALL_RECT) <= sizeof(m_originalWindowRect),
+            "SMALL_RECT exceeds opaque storage");
+        *reinterpret_cast<SMALL_RECT*>(m_originalWindowRect) = csbi.srWindow;
     }
 
     // Save window style (from top-level window for third-party terminal compat)
@@ -484,9 +527,15 @@ void FConsoleWindow::restoreOriginalSettings()
     ensure(::SetCurrentConsoleFontEx(m_outputHandle, FALSE,
         reinterpret_cast<CONSOLE_FONT_INFOEX*>(m_originalFontInfo)));
 
-    // Restore buffer size
+    SMALL_RECT minWindow = {0, 0, 0, 0};
+    ::SetConsoleWindowInfo(m_outputHandle, TRUE, &minWindow);
+
+    // Restore buffer and viewport size. The viewport must be shrunk before
+    // the buffer can be reduced.
     ensure(::SetConsoleScreenBufferSize(m_outputHandle,
         *reinterpret_cast<const COORD*>(m_originalBufferSize)));
+    ensure(::SetConsoleWindowInfo(m_outputHandle, TRUE,
+        reinterpret_cast<const SMALL_RECT*>(m_originalWindowRect)));
 
     // Restore window style (to top-level window for third-party terminal compat)
     HWND topLevel = findTopLevelHwnd();
@@ -573,28 +622,70 @@ void FConsoleWindow::applyBufferSize()
     windowRect.Right = m_settings.Columns - 1;
     windowRect.Bottom = m_settings.Rows - 1;
     verify(::SetConsoleWindowInfo(m_outputHandle, TRUE, &windowRect));
+    applyPhysicalWindowSize();
 
-    // Verify the window size was actually applied.
-    // Third-party terminals (Cmder/ConEmu, Windows Terminal) may ignore
-    // SetConsoleWindowInfo. Fall back to the xterm resize escape sequence
-    // ESC[8;rows;cols t which is widely supported by modern terminals.
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    if (m_bVirtualTerminalSupported
-        && ::GetConsoleScreenBufferInfo(m_outputHandle, &csbi))
+    // Third-party terminals and IDE hosts may keep their outer window size
+    // even when the Win32 console viewport changes. Request the terminal
+    // window size explicitly with the xterm resize sequence.
+    if (m_bVirtualTerminalSupported)
     {
-        SHORT actualW = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-        SHORT actualH = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-        if (actualW != m_settings.Columns || actualH != m_settings.Rows)
-        {
-            char buf[32];
-            int len = std::snprintf(buf, sizeof(buf), "\x1b[8;%d;%dt",
-                static_cast<int>(m_settings.Rows),
-                static_cast<int>(m_settings.Columns));
-            DWORD written = 0;
-            ::WriteConsoleA(m_outputHandle, buf, static_cast<DWORD>(len),
-                &written, nullptr);
-        }
+        char buf[32];
+        int len = std::snprintf(buf, sizeof(buf), "\x1b[8;%d;%dt",
+            static_cast<int>(m_settings.Rows),
+            static_cast<int>(m_settings.Columns));
+        DWORD written = 0;
+        ::WriteConsoleA(m_outputHandle, buf, static_cast<DWORD>(len),
+            &written, nullptr);
     }
+}
+
+void FConsoleWindow::applyPhysicalWindowSize()
+{
+    if (m_consoleHwnd == nullptr)
+    {
+        return;
+    }
+
+    HWND targetHwnd = findTopLevelHwnd();
+    if (!::IsWindow(targetHwnd))
+    {
+        return;
+    }
+
+    CONSOLE_FONT_INFO fontInfo = {};
+    if (!::GetCurrentConsoleFont(m_outputHandle, FALSE, &fontInfo))
+    {
+        return;
+    }
+
+    COORD cellSize = ::GetConsoleFontSize(m_outputHandle, fontInfo.nFont);
+    if (cellSize.X <= 0 || cellSize.Y <= 0)
+    {
+        return;
+    }
+
+    RECT windowRect = {
+        0,
+        0,
+        static_cast<LONG>(m_settings.Columns) * cellSize.X,
+        static_cast<LONG>(m_settings.Rows) * cellSize.Y
+    };
+
+    const LONG style = ::GetWindowLongA(targetHwnd, GWL_STYLE);
+    const LONG exStyle = ::GetWindowLongA(targetHwnd, GWL_EXSTYLE);
+    if (!::AdjustWindowRectEx(&windowRect, style, FALSE, exStyle))
+    {
+        return;
+    }
+
+    ::SetWindowPos(
+        targetHwnd,
+        nullptr,
+        0,
+        0,
+        windowRect.right - windowRect.left,
+        windowRect.bottom - windowRect.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
 void FConsoleWindow::applyWindowStyle()
@@ -623,6 +714,7 @@ void FConsoleWindow::applyWindowStyle()
     ::SetWindowLongA(targetHwnd, GWL_STYLE, style);
     ::SetWindowPos(targetHwnd, nullptr, 0, 0, 0, 0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    applyPhysicalWindowSize();
 }
 
 } // namespace Enigma

@@ -202,6 +202,37 @@ ENIGMA_IMPLEMENT_APPLICATION_CORE_AUTOMATION_TEST_F(ConsoleWindowCreation, GetHe
     m_app->DestroyWindow(window);
 }
 
+ENIGMA_IMPLEMENT_APPLICATION_CORE_AUTOMATION_TEST_F(ConsoleWindowCreation, MakeWindow_AppliesConsoleViewportSize)
+{
+    FGenericWindow* Window = MakeConsoleWindow(m_app, 80, 25);
+    if (!TestNotEqual("ASSERT_NE", Window, nullptr)) { return; }
+
+    HANDLE OutputHandle = ::CreateFileA("CONOUT$",
+        GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE,
+        nullptr, OPEN_EXISTING, 0, nullptr);
+    if (!TestNotEqual("ASSERT_NE", OutputHandle, INVALID_HANDLE_VALUE))
+    {
+        m_app->DestroyWindow(Window);
+        return;
+    }
+
+    CONSOLE_SCREEN_BUFFER_INFO BufferInfo = {};
+    bool bGotInfo = ::GetConsoleScreenBufferInfo(OutputHandle, &BufferInfo) != FALSE;
+    ::CloseHandle(OutputHandle);
+    if (!TestTrue("ASSERT_TRUE", bGotInfo))
+    {
+        m_app->DestroyWindow(Window);
+        return;
+    }
+
+    const SHORT ViewportWidth = BufferInfo.srWindow.Right - BufferInfo.srWindow.Left + 1;
+    const SHORT ViewportHeight = BufferInfo.srWindow.Bottom - BufferInfo.srWindow.Top + 1;
+    TestEqual("EXPECT_EQ", ViewportWidth, static_cast<SHORT>(80));
+    TestEqual("EXPECT_EQ", ViewportHeight, static_cast<SHORT>(25));
+
+    m_app->DestroyWindow(Window);
+}
+
 ENIGMA_IMPLEMENT_APPLICATION_CORE_AUTOMATION_TEST_F(ConsoleWindowCreation, MakeWindow_AppliesTitleFromDefinition)
 {
     FWindowDefinition def;

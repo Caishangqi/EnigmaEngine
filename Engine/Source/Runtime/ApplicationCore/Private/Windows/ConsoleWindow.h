@@ -88,6 +88,7 @@ private:
     void applyConsoleMode();
     void applyFont();
     void applyBufferSize();
+    void applyPhysicalWindowSize();
     void applyWindowStyle();
     void saveOriginalSettings();
     void restoreOriginalSettings();
@@ -115,6 +116,9 @@ private:
 
     // Opaque storage for Win32 COORD (4 bytes)
     alignas(2) unsigned char m_originalBufferSize[4] = {};
+
+    // Opaque storage for Win32 SMALL_RECT (8 bytes)
+    alignas(2) unsigned char m_originalWindowRect[8] = {};
 
     LONG m_originalWindowStyle = 0;
 
