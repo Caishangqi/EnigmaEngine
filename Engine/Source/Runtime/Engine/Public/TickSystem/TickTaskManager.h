@@ -55,6 +55,9 @@ public:
 	/// Remove a tick function from all lists and clean prerequisite references.
 	void RemoveTickFunction(FTickFunction& tickFunc);
 
+	/// Apply pending tick registration changes without executing any tick functions.
+	void FlushPendingChanges();
+
 private:
 	/// Per-group tick function lists.
 	struct FTickGroupData

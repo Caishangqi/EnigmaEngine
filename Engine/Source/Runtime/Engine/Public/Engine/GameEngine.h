@@ -34,6 +34,9 @@ public:
     /// Call this from your game module's StartupModule().
     static void RegisterGameInstanceFactory(GameInstanceFactory factory);
 
+    /// Clear the registered GameInstance factory before unloading a game module.
+    static void ClearGameInstanceFactory();
+
     void Init(FEngineLoop* engineLoop) override;
     void Start() override;
     void Tick(float deltaTime) override;
@@ -44,10 +47,14 @@ public:
     /// Get the game window created during Init. May be nullptr in headless mode.
     FGenericWindow* GetGameWindow() const { return m_gameWindow; }
 
-    // [TEST] Recreate GameInstance after hot-reload. Destroys old instance,
-    // creates new one using current factory (from reloaded DLL), calls Init.
+    // [TEST] Recreate GameInstance after hot-reload using current factory
+    // from the reloaded DLL. The old instance must already be destroyed.
     // Remove when Editor exists and handles object reconstruction.
     void RecreateGameInstance();
+
+    // [TEST] Destroy the current GameInstance before unloading a hot-reloaded DLL.
+    // Remove when Editor exists and handles object reconstruction.
+    void PrepareGameInstanceForHotReload();
 
 protected:
     /// Factory method -- uses registered factory if available,

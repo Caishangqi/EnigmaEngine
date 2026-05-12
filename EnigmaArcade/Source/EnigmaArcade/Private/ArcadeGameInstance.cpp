@@ -134,8 +134,8 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 		m_movementComp->VelX = v.X * m_movementComp->MoveSpeed;
 		m_movementComp->VelY = v.Y * m_movementComp->MoveSpeed;
 	});
-	InputSubsystem.BindAction(&m_moveAction,
-		Enigma::ETriggerEvent::Triggered, std::move(moveCb));
+	InputBindingHandles.push_back(InputSubsystem.BindAction(&m_moveAction,
+		Enigma::ETriggerEvent::Triggered, std::move(moveCb)));
 
 	// Resize: adjust width/height directly (discrete, one-shot)
 	Enigma::FInputActionCallback resizeCb;
@@ -147,8 +147,8 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 		m_playerSprite->Width  = std::max(m_playerSprite->Width, 1);
 		m_playerSprite->Height = std::max(m_playerSprite->Height, 1);
 	});
-	InputSubsystem.BindAction(&m_resizeAction,
-		Enigma::ETriggerEvent::Triggered, std::move(resizeCb));
+	InputBindingHandles.push_back(InputSubsystem.BindAction(&m_resizeAction,
+		Enigma::ETriggerEvent::Triggered, std::move(resizeCb)));
 
 	// Toggle: swap mapping contexts
 	Enigma::FInputActionCallback toggleCb;
@@ -170,8 +170,8 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 		ENIGMA_LOG(LogArcade, Info, "Mode: {}",
 			m_bMoveMode ? "Move" : "Resize");
 	});
-	InputSubsystem.BindAction(&m_toggleAction,
-		Enigma::ETriggerEvent::Triggered, std::move(toggleCb));
+	InputBindingHandles.push_back(InputSubsystem.BindAction(&m_toggleAction,
+		Enigma::ETriggerEvent::Triggered, std::move(toggleCb)));
 
 	// Exit: request engine shutdown
 	Enigma::FInputActionCallback exitCb;
@@ -180,8 +180,8 @@ void FArcadeGameInstance::SetupInput(Enigma::FInputSubsystem& InputSubsystem)
 		ENIGMA_LOG(LogArcade, Info, "ESC pressed, requesting exit");
 		Enigma::RequestEngineExit("ESC pressed");
 	});
-	InputSubsystem.BindAction(&m_exitAction,
-		Enigma::ETriggerEvent::Triggered, std::move(exitCb));
+	InputBindingHandles.push_back(InputSubsystem.BindAction(&m_exitAction,
+		Enigma::ETriggerEvent::Triggered, std::move(exitCb)));
 
 	// Start with Move context active
 	InputSubsystem.AddMappingContext(&m_moveContext, 0);
@@ -219,6 +219,18 @@ void FArcadeGameInstance::Render()
 
 void FArcadeGameInstance::Shutdown()
 {
+	if (m_inputSubsystem)
+	{
+		for (const Enigma::FInputBindingHandle& Handle : InputBindingHandles)
+		{
+			m_inputSubsystem->UnbindAction(Handle);
+		}
+		InputBindingHandles.clear();
+		m_inputSubsystem->RemoveMappingContext(&m_moveContext);
+		m_inputSubsystem->RemoveMappingContext(&m_resizeContext);
+		m_inputSubsystem = nullptr;
+	}
+
 	ENIGMA_LOG(LogArcade, Info, "ArcadeGameInstance shutdown");
 	Enigma::FGameInstance::Shutdown();
 }

@@ -10,6 +10,8 @@
 #include "InputTriggers.h"
 #include "InputSubsystem.h"
 
+#include <vector>
+
 namespace Enigma { class FGameObject; class FAsciiSpriteComponent; }
 class FArcadeMovementComponent;
 
@@ -57,4 +59,5 @@ private:
 	// --- State ---
 	bool m_bMoveMode = true;
 	Enigma::FInputSubsystem* m_inputSubsystem = nullptr;
+	std::vector<Enigma::FInputBindingHandle> InputBindingHandles;
 };

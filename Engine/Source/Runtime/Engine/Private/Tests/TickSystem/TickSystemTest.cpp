@@ -415,3 +415,28 @@ ENIGMA_IMPLEMENT_ENGINE_TICK_SYSTEM_AUTOMATION_TEST_F(TickSystemFixture, Complex
 	upB.UnregisterTickFunction();
 	post1.UnregisterTickFunction();
 }
+
+ENIGMA_IMPLEMENT_ENGINE_TICK_SYSTEM_AUTOMATION_TEST_F(TickSystemFixture, FlushPendingChangesDoesNotExecuteTicks)
+{
+	std::vector<int> Log;
+
+	FTestTickFunction TickFunction;
+	TickFunction.ID = 1;
+	TickFunction.TickGroup = ETickGroup::TG_Update;
+	TickFunction.ExecutionLog = &Log;
+
+	TickFunction.RegisterTickFunction(*m_tickManager);
+	m_tickManager->FlushPendingChanges();
+	TestTrue("EXPECT_TRUE", Log.empty());
+
+	m_tickManager->Tick(0.016f);
+	if (!TestEqual("ASSERT_EQ", Log.size(), 1u)) { return; }
+	TestEqual("EXPECT_EQ", Log[0], 1);
+
+	TickFunction.UnregisterTickFunction();
+	m_tickManager->FlushPendingChanges();
+
+	Log.clear();
+	m_tickManager->Tick(0.016f);
+	TestTrue("EXPECT_TRUE", Log.empty());
+}

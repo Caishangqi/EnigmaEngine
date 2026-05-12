@@ -9,6 +9,7 @@
 #include "GenericPlatform/GenericApplication.h"
 #include "GenericPlatform/GenericWindowDefinition.h"
 #include "GenericPlatform/GenericWindow.h"
+#include "TickSystem/TickTaskManager.h"
 
 #include <cstdio>
 #include <string>
@@ -22,6 +23,11 @@ FGameEngine::GameInstanceFactory FGameEngine::s_GameInstanceFactory = nullptr;
 void FGameEngine::RegisterGameInstanceFactory(GameInstanceFactory factory)
 {
     s_GameInstanceFactory = std::move(factory);
+}
+
+void FGameEngine::ClearGameInstanceFactory()
+{
+    s_GameInstanceFactory = nullptr;
 }
 
 void FGameEngine::Init(FEngineLoop* engineLoop)
@@ -146,8 +152,7 @@ FGameInstance* FGameEngine::GetGameInstance() const
     return GameInstance.get();
 }
 
-// [TEST] Hot-reload GameInstance recreation. Remove when Editor exists.
-void FGameEngine::RecreateGameInstance()
+void FGameEngine::PrepareGameInstanceForHotReload()
 {
     // Shutdown and destroy old instance.
     if (GameInstance)
@@ -156,10 +161,17 @@ void FGameEngine::RecreateGameInstance()
         GameInstance.reset();
     }
 
-    // Flush deferred tick function removals from the destroyed scene/components.
-    // Without this, TickTaskManager holds dangling pointers to destroyed objects.
-    SubsystemCollection.Tick(0.0f);
+    // Flush deferred tick function removals from the destroyed scene/components
+    // without ticking unrelated subsystems such as input.
+    if (auto* TickTaskManager = GetSubsystem<FTickTaskManager>())
+    {
+        TickTaskManager->FlushPendingChanges();
+    }
+}
 
+// [TEST] Hot-reload GameInstance recreation. Remove when Editor exists.
+void FGameEngine::RecreateGameInstance()
+{
     // Create new instance using current factory (from reloaded DLL).
     GameInstance = CreateGameInstance();
     if (GameInstance)

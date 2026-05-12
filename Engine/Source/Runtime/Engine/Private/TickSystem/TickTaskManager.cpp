@@ -85,6 +85,11 @@ void FTickTaskManager::RemoveTickFunction(FTickFunction& tickFunc)
 	m_pendingRemoves.push_back({&tickFunc, tickFunc.TickGroup});
 }
 
+void FTickTaskManager::FlushPendingChanges()
+{
+	processPendingChanges();
+}
+
 // -----------------------------------------------------------------
 // processPendingChanges -- apply deferred adds/removes at frame boundary
 // -----------------------------------------------------------------
